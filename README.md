@@ -15,16 +15,11 @@ Batteries included: PostgreSQL, SQLite, MySQL, JWT auth, Google OAuth, WebSocket
 ### Quick Install (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/llllOllOOll/spider/main/scripts/install.sh | bash
+curl -fsSL https://spiderme.org/install.sh | bash
 ```
 
 Or specify a version:
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/llllOllOOll/spider/main/scripts/install.sh | bash -s -- --version v0.1.0
-```
-
-Or specify a version:
 ```bash
 curl -fsSL https://spiderme.org/install.sh | bash -s -- --version v0.1.0
 ```
