@@ -42,6 +42,20 @@ pub fn build(b: *std.Build) void {
     });
     mod.addImport("spider_config", default_cfg_mod);
 
+    // spider CLI — `spider new <app_name>`
+    const cli_exe = b.addExecutable(.{
+        .name = "spider",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/cli/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "pg", .module = pg_dep.module("pg") },
+            },
+        }),
+    });
+    b.installArtifact(cli_exe);
+
     // generate-templates — CLI tool used by dev projects
     const gen_exe = b.addExecutable(.{
         .name = "generate-templates",
@@ -57,38 +71,24 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/build_helpers.zig"),
     });
 
-    // spider CLI — `spider new <app_name>`
-    const cli_exe = b.addExecutable(.{
-        .name = "spider",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/cli/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "pg", .module = pg_dep.module("pg") },
-            },
-        }),
-    });
-    b.installArtifact(cli_exe);
-
-    // spider-dev — test server
-    const test_exe = b.addExecutable(.{
-        .name = "spider-dev",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{
-                .{ .name = "spider", .module = mod },
-            },
-        }),
-    });
-    b.installArtifact(test_exe);
-
-    const run_dev = b.addRunArtifact(test_exe);
-    run_dev.step.dependOn(b.getInstallStep());
-    const run_step = b.step("run", "Run dev test server");
-    run_step.dependOn(&run_dev.step);
+    // // spider-dev — test server
+    // const test_exe = b.addExecutable(.{
+    //     .name = "spider-dev",
+    //     .root_module = b.createModule(.{
+    //         .root_source_file = b.path("src/main.zig"),
+    //         .target = target,
+    //         .optimize = optimize,
+    //         .imports = &.{
+    //             .{ .name = "spider", .module = mod },
+    //         },
+    //     }),
+    // });
+    // b.installArtifact(test_exe);
+    //
+    // const run_dev = b.addRunArtifact(test_exe);
+    // run_dev.step.dependOn(b.getInstallStep());
+    // const run_step = b.step("run", "Run dev test server");
+    // run_step.dependOn(&run_dev.step);
 
     // tests
     const mod_tests = b.addTest(.{
