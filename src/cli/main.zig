@@ -8,7 +8,9 @@ const usage =
     \\
     \\Usage:
     \\  spider new <app_name>          Create a new Spider project
-    \\  spider generate <subcommand>   Generate code (feature)
+    \\  spider generate <subcommand>   Generate code (aliases: g)
+    \\  spider g <subcommand>          Alias for generate
+    \\    feature <name>                Generate a new feature
     \\  spider migrate                 Run pending database migrations
     \\  spider help                    Show this help
     \\
@@ -35,6 +37,14 @@ pub fn main(init: std.process.Init) !void {
     } else if (std.mem.eql(u8, command, "generate")) {
         const subcommand = args.next() orelse {
             std.debug.print("Usage: spider generate <subcommand>\n", .{});
+            return;
+        };
+        try generate.run(io, allocator, subcommand, &args);
+    } else if (std.mem.eql(u8, command, "g")) {
+        const subcommand = args.next() orelse {
+            std.debug.print("Usage: spider g <subcommand>\n", .{});
+            std.debug.print("Available subcommands:\n", .{});
+            std.debug.print("  feature <name>    Generate a new feature\n", .{});
             return;
         };
         try generate.run(io, allocator, subcommand, &args);
