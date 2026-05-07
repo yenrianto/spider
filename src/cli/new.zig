@@ -25,6 +25,8 @@ const toast_tmpl = @embedFile("templates/toast.html.template");
 const spider_logo_png = @embedFile("assets/spider_logo.png");
 const favicon_png = @embedFile("assets/favicon.png");
 const favicon_ico = @embedFile("assets/favicon.ico");
+const layout_daisyui_html_tmpl = @embedFile("templates/layout_daisyui.html.template");
+const home_daisyui_index_tmpl = @embedFile("templates/home_daisyui_index.html.template");
 
 fn getTailwindUrl() []const u8 {
     const os = @import("builtin").os.tag;
@@ -95,7 +97,7 @@ fn writeFile(io: std.Io, dir: std.Io.Dir, path: []const u8, content: []const u8)
     try writer.interface.flush();
 }
 
-pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8) !void {
+pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_daisyui: bool) !void {
     const cwd = std.Io.Dir.cwd();
 
     cwd.createDir(io, app_name, .default_dir) catch |err| {
@@ -138,6 +140,9 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8) !void
 
     std.debug.print("Creating {s}...\n", .{app_name});
 
+    const selected_layout_tmpl = if (use_daisyui) layout_daisyui_html_tmpl else layout_html_tmpl;
+    const selected_home_index_tmpl = if (use_daisyui) home_daisyui_index_tmpl else home_index_tmpl;
+
     const files = .{
         .{ "build.zig", build_zig_tmpl },
         .{ "build.zig.zon", build_zon_tmpl },
@@ -148,12 +153,12 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8) !void
         .{ "src/core/mod.zig", core_mod_tmpl },
         .{ "src/features/mod.zig", features_mod_tmpl },
         .{ "src/features/home/mod.zig", home_mod_tmpl },
-        .{ "src/shared/templates/layout.html", layout_html_tmpl },
+        .{ "src/shared/templates/layout.html", selected_layout_tmpl },
         .{ "src/shared/templates/nav-bar.html", nav_bar_tmpl },
         .{ "src/shared/templates/side-bar.html", side_bar_tmpl },
         .{ "src/shared/templates/mobile-nav.html", mobile_nav_tmpl },
         .{ "src/shared/templates/toast.html", toast_tmpl },
-        .{ "src/features/home/views/index.html", home_index_tmpl },
+        .{ "src/features/home/views/index.html", selected_home_index_tmpl },
         .{ "src/features/home/controller.zig", home_controller_tmpl },
         .{ "Dockerfile", dockerfile_tmpl },
         .{ "docker-compose.yml", docker_compose_tmpl },

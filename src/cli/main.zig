@@ -29,11 +29,19 @@ pub fn main(init: std.process.Init) !void {
     };
 
     if (std.mem.eql(u8, command, "new")) {
-        const app_name = args.next() orelse {
+        var use_daisyui = false;
+        var arg = args.next();
+
+        if (arg != null and std.mem.eql(u8, arg.?, "--daisyui")) {
+            use_daisyui = true;
+            arg = args.next();
+        }
+
+        const app_name = arg orelse {
             std.debug.print("error: missing app name\nUsage: spider new <app_name>\n", .{});
             return error.MissingAppName;
         };
-        try new.run(io, allocator, app_name);
+        try new.run(io, allocator, app_name, use_daisyui);
     } else if (std.mem.eql(u8, command, "generate")) {
         const subcommand = args.next() orelse {
             std.debug.print("Usage: spider generate <subcommand>\n", .{});
