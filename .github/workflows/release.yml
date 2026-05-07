@@ -34,13 +34,11 @@ jobs:
           version: 0.17.0-dev.93+76174e1bc
 
       - name: Build Spider CLI
-        run: |
-          cd src/cli
-          zig build -Doptimize=ReleaseSafe -Dtarget=${{ matrix.target }}
+        run: zig build -Doptimize=ReleaseSafe -Dtarget=${{ matrix.target }}
 
       - name: Create tarball
         run: |
-          cd src/cli/zig-out/bin
+          cd zig-out/bin
           tar -czf spider-${{ matrix.platform }}.tar.gz spider
           mv spider-${{ matrix.platform }}.tar.gz $GITHUB_WORKSPACE/
 
