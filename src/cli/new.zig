@@ -112,12 +112,15 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8) !void
     project_dir.createDirPath(io, "bin") catch {};
     project_dir.createDirPath(io, "public/js") catch {};
     project_dir.createDirPath(io, "public/css") catch {};
+    project_dir.createDirPath(io, "public/fonts") catch {};
 
     try downloader.download(io, allocator, getTailwindUrl(), project_dir, "bin/tailwindcss");
     try downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.mjs", project_dir, "bin/daisyui.mjs");
     try downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.mjs", project_dir, "bin/daisyui-theme.mjs");
     try downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/alpinejs@latest/dist/cdn.min.js", project_dir, "public/js/alpine.min.js");
     try downloader.download(io, allocator, "https://unpkg.com/htmx.org@latest/dist/htmx.min.js", project_dir, "public/js/htmx.min.js");
+    try downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css", project_dir, "public/css/tabler-icons.min.css");
+    try downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/fonts/tabler-icons.woff2", project_dir, "public/fonts/tabler-icons.woff2");
 
     const tailwind_path = try std.fmt.allocPrint(allocator, "{s}/bin/tailwindcss", .{app_name});
     defer allocator.free(tailwind_path);
