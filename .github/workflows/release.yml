@@ -34,7 +34,14 @@ jobs:
           version: 0.17.0-dev.93+76174e1bc
 
       - name: Build Spider CLI
-        run: zig build -Doptimize=ReleaseSafe -Dtarget=${{ matrix.target }}
+        run: |
+          echo "=== Environment ==="
+            uname -a
+            zig version
+            echo "=== Fetch dependencies ==="
+            zig fetch git+https://github.com/llllOllOOll/pacman#fa4cfdbc2429fbf39bb569ae307ccc6ca6024f3a
+            echo "=== Build ==="
+            zig build -Doptimize=ReleaseSafe -Dtarget=${{ matrix.target }} 2>&1
 
       - name: Create tarball
         run: |
