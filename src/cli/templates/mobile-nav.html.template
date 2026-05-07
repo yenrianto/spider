@@ -1,0 +1,35 @@
+<div class="btm-nav btm-nav-sm lg:hidden bg-base-200 border-t border-base-300 z-30">
+        <a href="/" class="active text-lime-400">
+            <i class="ti ti-layout-dashboard text-xl"></i>
+            <span class="btm-nav-label text-xs">Home</span>
+        </a>
+        <!-- SPIDER:BOTTOM_NAV_ITEMS -->
+        <a href="/analytics">
+            <i class="ti ti-chart-bar text-xl"></i>
+            <span class="btm-nav-label text-xs">Analytics</span>
+        </a>
+        <a href="/leads">
+            <i class="ti ti-users text-xl"></i>
+            <span class="btm-nav-label text-xs">Leads</span>
+        </a>
+        <button @click="moreOpen = !moreOpen">
+            <i class="ti ti-dots text-xl"></i>
+            <span class="btm-nav-label text-xs">More</span>
+        </button>
+    </div>
+
+<div x-show="moreOpen"
+         @click.self="moreOpen = false"
+         class="lg:hidden fixed inset-0 bg-black/60 z-40"
+         style="display:none;">
+        <div class="absolute bottom-16 left-0 right-0 bg-base-200 rounded-t-2xl border-t border-base-300 pb-4">
+            <div class="w-8 h-1 bg-base-300 rounded-full mx-auto mt-3 mb-3"></div>
+            <!-- SPIDER:MORE_ITEMS -->
+            <ul class="menu menu-sm px-3 gap-0.5">
+                <li><a href="/transactions"><i class="ti ti-arrows-exchange"></i>Transactions</a></li>
+                <li><a href="/calendar"><i class="ti ti-calendar"></i>Calendar</a></li>
+                <li><a href="/settings"><i class="ti ti-settings"></i>Settings</a></li>
+                <li><a href="/logout" class="text-error"><i class="ti ti-logout"></i>Logout</a></li>
+            </ul>
+        </div>
+    </div>

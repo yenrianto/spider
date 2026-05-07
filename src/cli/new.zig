@@ -18,6 +18,13 @@ const core_mod_tmpl = @embedFile("templates/core_mod.zig.template");
 const features_mod_tmpl = @embedFile("templates/features_mod.zig.template");
 const home_mod_tmpl = @embedFile("templates/home_mod.zig.template");
 const styles_css_tmpl = @embedFile("templates/styles.css.template");
+const nav_bar_tmpl = @embedFile("templates/nav-bar.html.template");
+const side_bar_tmpl = @embedFile("templates/side-bar.html.template");
+const mobile_nav_tmpl = @embedFile("templates/mobile-nav.html.template");
+const toast_tmpl = @embedFile("templates/toast.html.template");
+const spider_logo_png = @embedFile("assets/spider_logo.png");
+const favicon_png = @embedFile("assets/favicon.png");
+const favicon_ico = @embedFile("assets/favicon.ico");
 
 fn getTailwindUrl() []const u8 {
     const os = @import("builtin").os.tag;
@@ -142,6 +149,10 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8) !void
         .{ "src/features/mod.zig", features_mod_tmpl },
         .{ "src/features/home/mod.zig", home_mod_tmpl },
         .{ "src/shared/templates/layout.html", layout_html_tmpl },
+        .{ "src/shared/templates/nav-bar.html", nav_bar_tmpl },
+        .{ "src/shared/templates/side-bar.html", side_bar_tmpl },
+        .{ "src/shared/templates/mobile-nav.html", mobile_nav_tmpl },
+        .{ "src/shared/templates/toast.html", toast_tmpl },
         .{ "src/features/home/views/index.html", home_index_tmpl },
         .{ "src/features/home/controller.zig", home_controller_tmpl },
         .{ "Dockerfile", dockerfile_tmpl },
@@ -150,11 +161,24 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8) !void
         .{ ".gitignore", gitignore_tmpl },
     };
 
+    const static_assets = .{
+        .{ "public/images/logo.png", spider_logo_png },
+        .{ "public/favicon.png", favicon_png },
+        .{ "public/favicon.ico", favicon_ico },
+    };
+
     inline for (files) |f| {
         const path = f[0];
         const tmpl = f[1];
         const content = try render(allocator, tmpl, app_name, fingerprint);
         defer allocator.free(content);
+        try writeFile(io, project_dir, path, content);
+        std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
+    }
+
+    inline for (static_assets) |f| {
+        const path = f[0];
+        const content = f[1];
         try writeFile(io, project_dir, path, content);
         std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
     }
