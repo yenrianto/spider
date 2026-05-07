@@ -9,9 +9,17 @@
     <script defer src="/js/alpine.min.js"></script>
     <script src="/js/htmx.min.js"></script>
     <style>
+        @media (min-width: 1024px) {
+            .desktop-aside { display: flex !important; }
+            .mobile-only { display: none !important; }
+        }
+        @media (max-width: 1023px) {
+            .desktop-aside { display: none !important; }
+            .mobile-only { display: flex !important; }
+        }
         @font-face {
             font-family: 'tabler-icons';
-            src: url('/fonts/tabler-icons.woff2') format('woff2');
+            src: url('/fonts/tabler-icons.woff2') format(woff2);
             font-weight: normal;
             font-style: normal;
         }
@@ -23,7 +31,7 @@
 
     <!-- NAVBAR -->
     <nav style="height:52px; background:#141414; border-bottom:0.5px solid #2a2a2a; display:flex; align-items:center; padding:0 16px; gap:10px; position:fixed; top:0; left:0; right:0; z-index:30;">
-        <button class="lg:hidden" @click="drawerOpen = !drawerOpen" aria-label="menu">
+        <button class="mobile-only" @click="drawerOpen = !drawerOpen" aria-label="menu">
             <i class="ti ti-menu-2" style="font-size:20px; color:#888;"></i>
         </button>
         <div style="display:flex; align-items:center; gap:8px;">
@@ -39,7 +47,7 @@
     </nav>
 
     <!-- DESKTOP ASIDE -->
-    <aside class="hidden lg:flex"
+    <aside class="desktop-aside"
            :style="sidebarOpen ? 'width:200px' : 'width:52px'"
            style="position:fixed; top:52px; left:0; bottom:0; background:#141414; border-right:0.5px solid #2a2a2a; flex-direction:column; align-items:center; padding:8px 0; transition:width 0.25s cubic-bezier(.4,0,.2,1); overflow:hidden; z-index:20;">
 
@@ -74,13 +82,13 @@
     <div x-show="drawerOpen"
          @click="drawerOpen = false"
          style="position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:40; display:none;"
-         class="lg:hidden">
+         class="mobile-only">
     </div>
 
     <!-- MOBILE SIDE DRAWER -->
     <div :class="drawerOpen ? 'translate-x-0' : '-translate-x-full'"
          style="position:fixed; top:52px; left:0; bottom:56px; width:200px; background:#141414; border-right:0.5px solid #2a2a2a; z-index:50; transition:transform 0.25s cubic-bezier(.4,0,.2,1); padding:8px 6px;"
-         class="lg:hidden">
+         class="mobile-only">
         <a href="/" style="height:36px; border-radius:6px; display:flex; align-items:center; gap:10px; padding:0 10px; color:#a3e635; text-decoration:none;">
             <i class="ti ti-home" style="font-size:16px;"></i>
             <span style="font-size:13px;">Home</span>
@@ -91,12 +99,12 @@
     <!-- MAIN CONTENT -->
     <main :style="'padding-top:52px;' + (sidebarOpen ? 'padding-left:200px' : 'padding-left:52px')"
           style="transition:padding-left 0.25s cubic-bezier(.4,0,.2,1); min-height:100vh;"
-          class="lg:block pb-16 lg:pb-0">
+          class="pb-16">
         { slot }
     </main>
 
     <!-- MOBILE BOTTOM NAV -->
-    <nav class="lg:hidden"
+    <nav class="mobile-only"
          style="position:fixed; bottom:0; left:0; right:0; height:56px; background:#141414; border-top:0.5px solid #2a2a2a; display:flex; align-items:center; justify-content:space-around; z-index:30;">
         <a href="/" style="display:flex; flex-direction:column; align-items:center; gap:2px; flex:1; text-decoration:none; padding:6px 0;">
             <i class="ti ti-home" style="font-size:20px; color:#a3e635;"></i>
@@ -113,7 +121,7 @@
     <!-- MOBILE MORE DRAWER -->
     <div :class="moreOpen ? 'translate-y-0' : 'translate-y-full'"
          style="position:fixed; bottom:56px; left:0; right:0; background:#1a1a1a; border-top:0.5px solid #2a2a2a; border-radius:12px 12px 0 0; padding:8px 0; z-index:40; transition:transform 0.25s cubic-bezier(.4,0,.2,1);"
-         class="lg:hidden">
+         class="mobile-only">
         <div style="width:32px; height:3px; background:#333; border-radius:99px; margin:0 auto 8px;"></div>
         <!-- SPIDER:MORE_ITEMS -->
         <a href="/settings" style="display:flex; align-items:center; gap:12px; padding:10px 20px; color:#aaa; text-decoration:none; font-size:13px;">
