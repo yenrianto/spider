@@ -10,6 +10,42 @@ Batteries included: PostgreSQL, SQLite, MySQL, JWT auth, Google OAuth, WebSocket
 
 ---
 
+## Installation
+
+### Quick Install (Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/llllOllOOll/spider/main/scripts/install.sh | bash
+```
+
+Or specify a version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/llllOllOOll/spider/main/scripts/install.sh | bash -s -- --version v0.1.0
+```
+
+Or specify a version:
+```bash
+curl -fsSL https://spiderme.org/install.sh | bash -s -- --version v0.1.0
+```
+
+### Manual Install
+
+Add Spider as a dependency in your `build.zig`:
+
+```bash
+zig fetch --save git+https://github.com/llllOllOOll/spider#main
+```
+
+Add to your `build.zig`:
+
+```zig
+const spider_dep = b.dependency("spider", .{ .target = target });
+const spider_mod = spider_dep.module("spider");
+```
+
+---
+
 ## Requirements
 
 - Zig `0.17.0-dev` or compatible

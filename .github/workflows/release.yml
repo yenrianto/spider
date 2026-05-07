@@ -1,0 +1,78 @@
+name: Release Spider CLI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build for ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            target: x86_64-linux
+          - os: ubuntu-latest
+            platform: linux-aarch64
+            target: aarch64-linux
+          - os: macos-latest
+            platform: macos-x86_64
+            target: x86_64-macos
+          - os: macos-latest
+            platform: macos-aarch64
+            target: aarch64-macos
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: 0.17.0-dev.93+76174e1bc
+
+      - name: Build Spider CLI
+        run: |
+          cd src/cli
+          zig build -Doptimize=ReleaseSafe -Dtarget=${{ matrix.target }}
+
+      - name: Create tarball
+        run: |
+          cd src/cli/zig-out/bin
+          tar -czf spider-${{ matrix.platform }}.tar.gz spider
+          mv spider-${{ matrix.platform }}.tar.gz $GITHUB_WORKSPACE/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spider-${{ matrix.platform }}.tar.gz
+          path: spider-${{ matrix.platform }}.tar.gz
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            spider-linux-x86_64.tar.gz
+            spider-linux-aarch64.tar.gz
+            spider-macos-x86_64.tar.gz
+            spider-macos-aarch64.tar.gz
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
