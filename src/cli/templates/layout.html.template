@@ -19,10 +19,24 @@
         }
     </style>
 </head>
+<body x-data="{{dark: true, sidebarOpen: false, drawerOpen: false, moreOpen: false}}"
+      :data-theme="dark ? 'dark' : 'light'"
+      class="bg-base-100 text-base-content min-h-screen">
 
-<body class="bg-base-100 text-base-content min-h-screen">
+    <!-- Toast -->
+    <div
+        x-data="{{show: false, message: '', type: 'success'}}"
+        @item-saved.window="message = 'Saved!'; type = 'success'; show = true; setTimeout(() => show = false, 3000)"
+        @item-deleted.window="message = 'Deleted!'; type = 'error'; show = true; setTimeout(() => show = false, 3000)"
+        x-show="show"
+        x-transition
+        class="toast toast-top toast-end z-50">
+        <div :class="type === 'success' ? 'alert alert-success' : 'alert alert-error'">
+            <span x-text="message"></span>
+        </div>
+    </div>
 
-  <main class="min-h-screen">
+    <main class="min-h-screen">
         { slot }
     </main>
 

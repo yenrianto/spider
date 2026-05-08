@@ -3,6 +3,8 @@ const new = @import("new.zig");
 const generate = @import("generate.zig");
 const migrate = @import("migrate.zig");
 
+const version = "0.6.2";
+
 const usage =
     \\Spider CLI — spiderme.org
     \\
@@ -12,6 +14,7 @@ const usage =
     \\  spider g <subcommand>          Alias for generate
     \\    feature <name>                Generate a new feature
     \\  spider migrate                 Run pending database migrations
+    \\  spider version                 Show CLI version
     \\  spider help                    Show this help
     \\
 ;
@@ -19,7 +22,6 @@ const usage =
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
     const io = init.io;
-
     var args = try std.process.Args.Iterator.initAllocator(init.minimal.args, allocator);
     defer args.deinit();
     _ = args.next(); // skip program name
@@ -32,12 +34,10 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, command, "new")) {
         var use_daisyui = false;
         var arg = args.next();
-
         if (arg != null and std.mem.eql(u8, arg.?, "--daisyui")) {
             use_daisyui = true;
             arg = args.next();
         }
-
         const app_name = arg orelse {
             std.debug.print("error: missing app name\nUsage: spider new <app_name>\n", .{});
             return error.MissingAppName;
@@ -59,6 +59,8 @@ pub fn main(init: std.process.Init) !void {
         try generate.run(io, allocator, subcommand, &args);
     } else if (std.mem.eql(u8, command, "migrate")) {
         try migrate.run(io, allocator);
+    } else if (std.mem.eql(u8, command, "version")) {
+        std.debug.print("spider v{s}\n", .{version});
     } else if (std.mem.eql(u8, command, "help")) {
         std.debug.print("{s}", .{usage});
     } else {
