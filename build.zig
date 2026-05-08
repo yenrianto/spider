@@ -7,14 +7,6 @@ pub fn build(b: *std.Build) void {
     const pacman_dep = b.dependency("pacman", .{});
     const pg_dep = b.dependency("pg", .{ .target = target, .optimize = optimize });
 
-    const tc_env = b.addTranslateC(.{
-        .root_source_file = b.path("includes/env.h"),
-        .target = target,
-        .optimize = optimize,
-    });
-    tc_env.addSystemIncludePath(.{ .cwd_relative = "/usr/include" });
-    const c_env = tc_env.createModule();
-
     const mod = b.addModule("spider", .{
         .root_source_file = b.path("src/spider.zig"),
         .target = target,
@@ -22,7 +14,6 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
         .imports = &.{
             .{ .name = "pacman", .module = pacman_dep.module("pacman") },
-            .{ .name = "c_env", .module = c_env },
             .{ .name = "pg", .module = pg_dep.module("pg") },
         },
     });

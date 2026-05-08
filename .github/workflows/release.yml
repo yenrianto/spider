@@ -14,10 +14,16 @@ jobs:
         include:
           - platform: linux-x86_64
             target: x86_64-linux
+            binary: spider
           - platform: macos-x86_64
             target: x86_64-macos
+            binary: spider
           - platform: macos-aarch64
             target: aarch64-macos
+            binary: spider
+          - platform: windows-x86_64
+            target: x86_64-windows
+            binary: spider.exe
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +39,7 @@ jobs:
       - name: Create tarball
         run: |
           cd zig-out/bin
-          tar -czf spider-${{ matrix.platform }}.tar.gz spider
+          tar -czf spider-${{ matrix.platform }}.tar.gz ${{ matrix.binary }}
           mv spider-${{ matrix.platform }}.tar.gz $GITHUB_WORKSPACE/
 
       - name: Upload artifact
@@ -64,6 +70,7 @@ jobs:
             spider-linux-x86_64.tar.gz
             spider-macos-x86_64.tar.gz
             spider-macos-aarch64.tar.gz
+            spider-windows-x86_64.tar.gz
           generate_release_notes: true
           draft: false
           prerelease: false

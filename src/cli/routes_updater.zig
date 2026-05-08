@@ -17,7 +17,8 @@ pub fn updateMainZig(
     defer allocator.free(existing);
 
     // 1. Adicionar import após "const home = features.home;"
-    const import_line = try std.fmt.allocPrint(allocator,
+    const import_line = try std.fmt.allocPrint(
+        allocator,
         "const {s} = features.{s};\n",
         .{ feature, feature },
     );
@@ -38,11 +39,12 @@ pub fn updateMainZig(
     defer allocator.free(with_import);
 
     // 2. Adicionar rotas antes de .listen(
-    const routes = try std.fmt.allocPrint(allocator,
+    const routes = try std.fmt.allocPrint(
+        allocator,
         "        .get(\"/{s}\", {s}.controller.index)\n" ++
-        "        .post(\"/{s}/create\", {s}.controller.create)\n" ++
-        "        .post(\"/{s}/:id/update\", {s}.controller.update)\n" ++
-        "        .post(\"/{s}/:id/delete\", {s}.controller.delete)\n",
+            "        .post(\"/{s}/create\", {s}.controller.create)\n" ++
+            "        .post(\"/{s}/:id/update\", {s}.controller.update)\n" ++
+            "        .post(\"/{s}/:id/delete\", {s}.controller.delete)\n",
         .{ plural, feature, plural, feature, plural, feature, plural, feature },
     );
     defer allocator.free(routes);

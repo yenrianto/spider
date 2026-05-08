@@ -2,7 +2,8 @@ const std = @import("std");
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
     const allocator = init.arena.allocator();
-    var args_it = std.process.Args.Iterator.init(init.minimal.args);
+    var args_it = try std.process.Args.Iterator.initAllocator(init.minimal.args, allocator);
+    defer args_it.deinit();
     _ = args_it.next(); // Skip program name
     const source_dir = args_it.next() orelse {
         std.debug.print("Usage: generate-templates <source_dir> <output_file>\n", .{});

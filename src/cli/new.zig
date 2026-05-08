@@ -31,6 +31,7 @@ const home_daisyui_index_tmpl = @embedFile("templates/home_daisyui_index.html.te
 fn getTailwindUrl() []const u8 {
     const os = @import("builtin").os.tag;
     const arch = @import("builtin").cpu.arch;
+    if (os == .windows) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-windows-x64.exe";
     if (os == .macos and arch == .aarch64) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-macos-arm64";
     if (os == .macos) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-macos-x64";
     if (arch == .aarch64) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-arm64";

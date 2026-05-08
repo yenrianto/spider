@@ -1,13 +1,22 @@
 const std = @import("std");
-const c = @import("c_env");
+const builtin = @import("builtin");
+
+fn setEnvVarNative(name: [*:0]const u8, value: [*:0]const u8, overwrite: bool) void {
+    if (builtin.os.tag == .windows) {
+        const _putenv_s = struct {
+            extern fn _putenv_s(name: [*:0]const u8, value: [*:0]const u8) c_int;
+        }._putenv_s;
+        _ = _putenv_s(name, value);
+    } else {
+        const setenv = struct {
+            extern fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
+        }.setenv;
+        _ = setenv(name, value, @intFromBool(overwrite));
+    }
+}
 
 pub fn get(key: []const u8) ?[]const u8 {
-    var buf: [256]u8 = undefined;
-    if (key.len >= buf.len) return null;
-    @memcpy(buf[0..key.len], key);
-    buf[key.len] = 0;
-    const val = c.getenv(@as([*c]const u8, @ptrCast(&buf))) orelse return null;
-    return std.mem.span(@as([*:0]const u8, @ptrCast(val)));
+    return std.process.getEnvVarOwned(std.heap.page_allocator, key) catch null;
 }
 
 pub fn getOr(key: []const u8, default: []const u8) []const u8 {
@@ -79,7 +88,7 @@ fn loadFile(allocator: std.mem.Allocator, path: []const u8, overwrite: bool) !vo
             const value_z = try allocator.dupeZ(u8, value);
             defer allocator.free(value_z);
 
-            _ = c.setenv(key_z.ptr, value_z.ptr, if (overwrite) @as(c_int, 1) else @as(c_int, 0));
+            setEnvVarNative(key_z.ptr, value_z.ptr, overwrite);
         }
     }
 }

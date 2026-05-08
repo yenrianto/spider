@@ -9,13 +9,10 @@ pub fn generateTimestamp(io: std.Io) u64 {
 pub fn updateMigrationsZig(io: std.Io, allocator: std.mem.Allocator, root_dir: std.Io.Dir, timestamp: u64, plural: []const u8, migrations_zig_tmpl: []const u8) !void {
     const migrations_zig_path = "src/core/db/migrations.zig";
 
-    const new_entry = try std.fmt.allocPrint(allocator,
-        "    .{{\n" ++
+    const new_entry = try std.fmt.allocPrint(allocator, "    .{{\n" ++
         "        .version = \"{d}_create_{s}\",\n" ++
         "        .sql_file = @embedFile(\"./migrations/{d}_create_{s}.sql\"),\n" ++
-        "    }},\n",
-        .{ timestamp, plural, timestamp, plural }
-    );
+        "    }},\n", .{ timestamp, plural, timestamp, plural });
     defer allocator.free(new_entry);
 
     const existing = root_dir.readFileAlloc(io, migrations_zig_path, allocator, .limited(64 * 1024)) catch "";
