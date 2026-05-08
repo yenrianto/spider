@@ -1,15 +1,69 @@
 extends "layout"
-
-<div style="max-width: 800px; margin: 0 auto; padding: 2rem;">
-  <h1>{{plural}}</h1>
-
-  if ({{plural}}.len == 0) {
-    <p>No {{plural}} found.</p>
-  }
-
-  for ({{plural}}) |item| {
-    <div style="padding: 1rem; border: 1px solid #333; border-radius: 8px; margin-bottom: 0.75rem;">
-      <p>{ item.name }</p>
+<div class="max-w-2xl mx-auto p-8">
+    <div class="flex justify-between items-center mb-4">
+        <h1 class="text-2xl font-bold">{{Feature}}s</h1>
+        <button class="btn btn-primary"
+                hx-get="/{{plural}}/new"
+                hx-target="#{{feature}}-list"
+                hx-swap="beforebegin">
+            + New
+        </button>
     </div>
-  }
+
+    <div id="{{feature}}-list">
+        if ({{plural}}.len == 0) {
+            <p class="text-base-content/50">No {{plural}} found.</p>
+        }
+        for ({{plural}}) |item| {
+            <div id="{{feature}}-{ item.id }" class="card bg-base-200 p-4 mb-3 flex justify-between items-center">
+                <p>{ item.name }</p>
+                <div class="flex gap-2">
+                    <button class="btn btn-ghost btn-sm"
+                            hx-get="/{{plural}}/{ item.id }/edit"
+                            hx-target="#modal-content"
+                            hx-swap="innerHTML"
+                            @click="document.getElementById('{{feature}}-modal').showModal()">
+                        ✏️
+                    </button>
+                    <button class="btn btn-ghost btn-sm text-error"
+                            @click="document.getElementById('confirm-id').value='{ item.id }'; document.getElementById('confirm-modal').showModal()">
+                        ✕
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
 </div>
+
+<!-- Modal edit -->
+<dialog id="{{feature}}-modal" class="modal">
+    <div class="modal-box">
+        <div id="modal-content">
+            <p>Loading...</p>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>
+
+<!-- Modal confirm delete -->
+<dialog id="confirm-modal" class="modal">
+    <div class="modal-box">
+        <h3 class="font-bold text-lg mb-2">Delete {{Feature}}</h3>
+        <p class="text-base-content/70 mb-6">Are you sure? This action cannot be undone.</p>
+        <input type="hidden" id="confirm-id" value="">
+        <div class="modal-action">
+            <form method="dialog">
+                <button class="btn btn-ghost">Cancel</button>
+            </form>
+            <button class="btn btn-error"
+                    @click="htmx.ajax('POST', '/{{plural}}/' + document.getElementById('confirm-id').value + '/delete', {target: '#{{feature}}-' + document.getElementById('confirm-id').value, swap: 'outerHTML'}); document.getElementById('confirm-modal').close()">
+                Delete
+            </button>
+        </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+    </form>
+</dialog>

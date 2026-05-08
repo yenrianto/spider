@@ -82,4 +82,5 @@ pub fn build(b: *std.Build) void {
     });
     const css_step = b.step("css", "Build CSS with Tailwind");
     css_step.dependOn(&css.step);
+    exe.step.dependOn(&css.step);
 }

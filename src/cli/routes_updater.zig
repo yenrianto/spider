@@ -10,13 +10,14 @@ pub fn updateMainZig(
 ) !void {
     const main_path = "src/main.zig";
 
+    // Read existing main.zig content
     const existing = root_dir.readFileAlloc(io, main_path, allocator, .limited(64 * 1024)) catch {
         std.debug.print("warning: src/main.zig not found, skipping routes update\n", .{});
         return;
     };
     defer allocator.free(existing);
 
-    // 1. Adicionar import após "const home = features.home;"
+    // 1. Add feature import after "const home = features.home;"
     const import_line = try std.fmt.allocPrint(
         allocator,
         "const {s} = features.{s};\n",
@@ -29,8 +30,8 @@ pub fn updateMainZig(
         std.debug.print("warning: could not find import marker in main.zig\n", .{});
         return;
     };
-    const insert_pos = after_imports + import_marker.len;
 
+    const insert_pos = after_imports + import_marker.len;
     const with_import = try std.mem.concat(allocator, u8, &.{
         existing[0..insert_pos],
         import_line,
@@ -38,23 +39,36 @@ pub fn updateMainZig(
     });
     defer allocator.free(with_import);
 
-    // 2. Adicionar rotas antes de .listen(
+    // 2. Add all CRUD routes before .listen(
+    // Includes GET routes for index, newForm, edit
+    // and POST routes for create, update, delete
     const routes = try std.fmt.allocPrint(
         allocator,
         "        .get(\"/{s}\", {s}.controller.index)\n" ++
+            "        .get(\"/{s}/new\", {s}.controller.newForm)\n" ++
+            "        .get(\"/{s}/:id/edit\", {s}.controller.edit)\n" ++
             "        .post(\"/{s}/create\", {s}.controller.create)\n" ++
             "        .post(\"/{s}/:id/update\", {s}.controller.update)\n" ++
             "        .post(\"/{s}/:id/delete\", {s}.controller.delete)\n",
-        .{ plural, feature, plural, feature, plural, feature, plural, feature },
+        .{
+            plural, feature,
+            plural, feature,
+            plural, feature,
+            plural, feature,
+            plural, feature,
+            plural, feature,
+        },
     );
     defer allocator.free(routes);
 
+    // Find .listen( marker to insert routes just before it
     const listen_marker = "        .listen(";
     const listen_pos = std.mem.indexOf(u8, with_import, listen_marker) orelse {
         std.debug.print("warning: could not find .listen( in main.zig\n", .{});
         return;
     };
 
+    // Build final content with routes inserted before .listen(
     const final_content = try std.mem.concat(allocator, u8, &.{
         with_import[0..listen_pos],
         routes,

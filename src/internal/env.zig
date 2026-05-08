@@ -16,7 +16,13 @@ fn setEnvVarNative(name: [*:0]const u8, value: [*:0]const u8, overwrite: bool) v
 }
 
 pub fn get(key: []const u8) ?[]const u8 {
-    return std.process.getEnvVarOwned(std.heap.page_allocator, key) catch null;
+    const getenv = struct {
+        extern fn getenv(name: [*:0]const u8) ?[*:0]const u8;
+    }.getenv;
+    const key_z = std.heap.page_allocator.dupeZ(u8, key) catch return null;
+    defer std.heap.page_allocator.free(key_z);
+    const val = getenv(key_z.ptr) orelse return null;
+    return std.heap.page_allocator.dupe(u8, std.mem.sliceTo(val, 0)) catch null;
 }
 
 pub fn getOr(key: []const u8, default: []const u8) []const u8 {
