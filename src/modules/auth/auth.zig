@@ -42,7 +42,7 @@ pub fn jwtSign(alloc: std.mem.Allocator, claims: anytype, secret: []const u8) ![
     return std.fmt.allocPrint(alloc, "{s}.{s}.{s}", .{ HEADER_B64, payload_b64, sig_b64 });
 }
 
-pub fn jwtVerify(comptime T: type, alloc: std.mem.Allocator, token: []const u8, secret: []const u8) !T {
+pub fn jwtVerify(comptime T: type, alloc: std.mem.Allocator, io: std.Io, token: []const u8, secret: []const u8) !T {
     if (!@hasField(T, "sub")) @compileError("Claims must have 'sub' field");
     if (!@hasField(T, "exp")) @compileError("Claims must have 'exp' field");
 
@@ -76,10 +76,9 @@ pub fn jwtVerify(comptime T: type, alloc: std.mem.Allocator, token: []const u8, 
 
     // Verificar expiração
     if (@hasField(T, "exp")) {
-        var ts: std.os.linux.timespec = undefined;
-        _ = std.os.linux.clock_gettime(.REALTIME, &ts);
-        const now: i64 = ts.sec;
-        if (parsed.value.exp > 0 and parsed.value.exp < now) {
+        const now = std.Io.Clock.now(.real, io);
+        const now_sec: i64 = @intCast(@divFloor(now.nanoseconds, 1_000_000_000));
+        if (parsed.value.exp > 0 and parsed.value.exp < now_sec) {
             return JwtError.Expired;
         }
     }
@@ -183,7 +182,7 @@ pub const Auth = struct {
         const token = c.cookie(self.config.cookie_name) orelse
             return c.redirect(self.config.redirect_to);
 
-        const claims = jwtVerify(Claims, c.arena, token, self.config.secret) catch
+        const claims = jwtVerify(Claims, c.arena, c._io, token, self.config.secret) catch
             return c.redirect(self.config.redirect_to);
 
         const user_id_str = try std.fmt.allocPrint(c.arena, "{d}", .{claims.sub});
