@@ -1,4 +1,5 @@
 const std = @import("std");
+const posix = std.posix;
 const net = std.Io.net;
 
 pub const Hub = struct {
@@ -105,3 +106,147 @@ pub const Hub = struct {
         try writer.flush();
     }
 };
+
+fn makeSocketPair() ![2]net.Socket {
+    var fds: [2]posix.fd_t = undefined;
+    const rc = posix.system.socketpair(posix.AF.UNIX, posix.SOCK.STREAM | posix.SOCK.CLOEXEC, 0, &fds);
+    if (rc != 0) return error.Unexpected;
+    return .{
+        net.Socket{ .handle = fds[0], .address = .{ .ip4 = .{ .bytes = .{0} ** 4, .port = 0 } } },
+        net.Socket{ .handle = fds[1], .address = .{ .ip4 = .{ .bytes = .{0} ** 4, .port = 0 } } },
+    };
+}
+
+const testing = std.testing;
+
+test "Hub: init and deinit" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+    try testing.expectEqual(@as(usize, 0), hub.count());
+}
+
+test "Hub: add increases count" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets = try makeSocketPair();
+    defer sockets[0].close(io);
+    defer sockets[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+    try hub.add(.{ .id = 1, .stream = .{ .socket = sockets[0] } });
+    try testing.expectEqual(@as(usize, 1), hub.count());
+}
+
+test "Hub: remove decreases count" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets = try makeSocketPair();
+    defer sockets[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+    try hub.add(.{ .id = 99, .stream = .{ .socket = sockets[0] } });
+    hub.remove(99);
+    try testing.expectEqual(@as(usize, 0), hub.count());
+}
+
+test "Hub: remove nonexistent id does not crash" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+    hub.remove(404);
+    try testing.expectEqual(@as(usize, 0), hub.count());
+}
+
+test "Hub: broadcast writes valid WS frame" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets = try makeSocketPair();
+    defer sockets[0].close(io);
+    defer sockets[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+    try hub.add(.{ .id = 1, .stream = .{ .socket = sockets[0] } });
+
+    const msg = "hello";
+    hub.broadcast(msg);
+
+    var buf: [64]u8 = undefined;
+    var read_buf: [256]u8 = undefined;
+    var reader = net.Stream.Reader.init(.{ .socket = sockets[1] }, io, &read_buf);
+    try reader.interface.readSliceAll(buf[0..2]);
+    try testing.expectEqual(@as(u8, 0x81), buf[0]);
+    try testing.expectEqual(@as(u8, msg.len), buf[1]);
+    try reader.interface.readSliceAll(buf[0..msg.len]);
+    try testing.expectEqualStrings(msg, buf[0..msg.len]);
+}
+
+test "Hub: broadcast removes dead connection" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets = try makeSocketPair();
+    defer sockets[0].close(io);
+    defer sockets[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+    try hub.add(.{ .id = 1, .stream = .{ .socket = sockets[0] } });
+    try testing.expectEqual(@as(usize, 1), hub.count());
+
+    try (net.Stream{ .socket = sockets[0] }).shutdown(io, .send);
+    hub.broadcast("anything");
+    try testing.expectEqual(@as(usize, 0), hub.count());
+}
+
+test "Hub: broadcast delivers to all connections" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets_a = try makeSocketPair();
+    const sockets_b = try makeSocketPair();
+    defer sockets_a[0].close(io);
+    defer sockets_a[1].close(io);
+    defer sockets_b[0].close(io);
+    defer sockets_b[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+    try hub.add(.{ .id = 1, .stream = .{ .socket = sockets_a[0] } });
+    try hub.add(.{ .id = 2, .stream = .{ .socket = sockets_b[0] } });
+
+    const msg = "ping";
+    hub.broadcast(msg);
+
+    var buf_a: [64]u8 = undefined;
+    var read_buf_a: [256]u8 = undefined;
+    var reader_a = net.Stream.Reader.init(.{ .socket = sockets_a[1] }, io, &read_buf_a);
+    try reader_a.interface.readSliceAll(buf_a[0..2]);
+    try testing.expectEqual(@as(u8, 0x81), buf_a[0]);
+    try testing.expectEqual(@as(u8, msg.len), buf_a[1]);
+
+    var buf_b: [64]u8 = undefined;
+    var read_buf_b: [256]u8 = undefined;
+    var reader_b = net.Stream.Reader.init(.{ .socket = sockets_b[1] }, io, &read_buf_b);
+    try reader_b.interface.readSliceAll(buf_b[0..2]);
+    try testing.expectEqual(@as(u8, 0x81), buf_b[0]);
+    try testing.expectEqual(@as(u8, msg.len), buf_b[1]);
+}
+
+test "Hub: add duplicate id leaves zombie connection" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets_a = try makeSocketPair();
+    const sockets_b = try makeSocketPair();
+    defer sockets_a[0].close(io);
+    defer sockets_a[1].close(io);
+    defer sockets_b[0].close(io);
+    defer sockets_b[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+
+    try hub.add(.{ .id = 7, .stream = .{ .socket = sockets_a[0] } });
+    try hub.add(.{ .id = 7, .stream = .{ .socket = sockets_b[0] } });
+    try testing.expectEqual(@as(usize, 2), hub.count());
+
+    hub.remove(7);
+    try testing.expectEqual(@as(usize, 1), hub.count());
+}
