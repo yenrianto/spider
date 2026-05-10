@@ -6,6 +6,7 @@ const Database = @import("database.zig").Database;
 const DriverType = @import("database.zig").DriverType;
 pub const DatabaseCtx = @import("database.zig").DatabaseCtx;
 const zmd = @import("../render/zmd/zmd.zig");
+const Hub = @import("../ws/hub.zig").Hub;
 
 const root = @import("root");
 const has_embed = @hasDecl(root, "spider_templates");
@@ -61,6 +62,7 @@ pub const Ctx = struct {
     _headers: std.StringHashMapUnmanaged([]const u8) = .{},
     _decorations: ?*const anyopaque = null,
     _last_template: ?[]const u8 = null,
+    _ws_hub: ?*Hub = null,
 
     pub fn db(self: *Ctx) DatabaseCtx {
         return .{

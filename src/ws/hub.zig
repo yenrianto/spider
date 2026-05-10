@@ -36,6 +36,17 @@ pub const Hub = struct {
         try self.connections.append(self.allocator, conn);
     }
 
+    pub fn updateChannel(self: *Hub, conn_id: u64, channel: []const u8) !void {
+        self.mutex.lock(self.io) catch return error.LockFailed;
+        defer self.mutex.unlock(self.io);
+        for (self.connections.items) |*conn| {
+            if (conn.id == conn_id) {
+                conn.channel = channel;
+                return;
+            }
+        }
+    }
+
     pub fn remove(self: *Hub, conn_id: u64) void {
         self.mutex.lock(self.io) catch return;
         defer self.mutex.unlock(self.io);

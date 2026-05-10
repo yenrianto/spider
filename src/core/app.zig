@@ -19,6 +19,9 @@ const Env = @import("../internal/config.zig").Env;
 const default_config = @import("../internal/config.zig").default;
 const views_mod = @import("../render/views.zig");
 const livereload = @import("../modules/livereload.zig");
+const Hub = @import("../ws/hub.zig").Hub;
+const Ws = @import("../ws/ws.zig").Ws;
+const websocket = @import("../ws/websocket.zig");
 
 threadlocal var chain_middlewares: []const MiddlewareFn = &.{};
 threadlocal var chain_handler: ?Handler = null;
@@ -102,6 +105,7 @@ const WorkerCtx = struct {
     _db: ?*const Database,
     _driver_type: DriverType,
     decorations: ?*const anyopaque,
+    ws_hub: ?*Hub,
     global_middlewares: []const MiddlewareFn,
     path_middlewares: []const PathMiddlewareEntry,
     route_middlewares: []const RouteMiddlewareEntry,
@@ -119,6 +123,7 @@ const ConnCtx = struct {
     _db: ?*const Database,
     _driver_type: DriverType,
     decorations: ?*const anyopaque,
+    ws_hub: ?*Hub,
     global_middlewares: []const MiddlewareFn,
     path_middlewares: []const PathMiddlewareEntry,
     route_middlewares: []const RouteMiddlewareEntry,
@@ -148,6 +153,7 @@ fn workerLoop(wctx: WorkerCtx) void {
             ._db = wctx._db,
             ._driver_type = wctx._driver_type,
             .decorations = wctx.decorations,
+            .ws_hub = wctx.ws_hub,
             .global_middlewares = wctx.global_middlewares,
             .path_middlewares = wctx.path_middlewares,
             .route_middlewares = wctx.route_middlewares,
@@ -241,6 +247,7 @@ fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
                 ._stream = ctx.stream,
                 ._headers = headers_map,
                 ._decorations = ctx.decorations,
+                ._ws_hub = ctx.ws_hub,
             };
 
             var route_mws: []const MiddlewareFn = &.{};
@@ -278,6 +285,7 @@ fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
                 ._stream = ctx.stream,
                 ._headers = headers_map,
                 ._decorations = ctx.decorations,
+                ._ws_hub = ctx.ws_hub,
             };
             break :blk ctx_req.text("404 Not Found", .{ .status = .not_found }) catch
                 Response{ .status = .not_found, .body = "404 Not Found", .content_type = "text/plain" };
@@ -382,6 +390,46 @@ fn buildWrapper(comptime handler: anytype, comptime T: type) Handler {
     return W.call;
 }
 
+fn buildWsWrapper(comptime handler: fn (*Ws) anyerror!void) Handler {
+    const W = struct {
+        pub fn call(ctx: *Ctx) anyerror!Response {
+            const hub = ctx._ws_hub orelse {
+                std.debug.print("buildWsWrapper: no hub\n", .{});
+                return ctx.text("", .{});
+            };
+            std.debug.print("buildWsWrapper: hub={*}, handshaking...\n", .{hub});
+            var ws_server = websocket.Server.init(ctx._stream, ctx._io, ctx.arena);
+            if (!try ws_server.handshake(ctx.arena, &ctx._headers)) {
+                std.debug.print("buildWsWrapper: handshake failed\n", .{});
+                return ctx.text("", .{});
+            }
+            std.debug.print("buildWsWrapper: handshake OK\n", .{});
+
+            var rand_buf: [8]u8 = undefined;
+            std.Io.random(ctx._io, &rand_buf);
+            const conn_id = std.mem.readInt(u64, &rand_buf, .little);
+            std.debug.print("buildWsWrapper: conn_id={d}\n", .{conn_id});
+            try hub.add(.{ .id = conn_id, .stream = ctx._stream });
+            defer hub.remove(conn_id);
+            std.debug.print("buildWsWrapper: added to hub, calling handler...\n", .{});
+
+            var ws = Ws{
+                ._server = ws_server,
+                ._hub = hub,
+                ._conn_id = conn_id,
+                .params = ctx.params,
+                .arena = ctx.arena,
+                .io = ctx._io,
+            };
+
+            try handler(&ws);
+            std.debug.print("buildWsWrapper: handler returned\n", .{});
+            return ctx.text("", .{});
+        }
+    };
+    return W.call;
+}
+
 pub fn Server(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -403,6 +451,8 @@ pub fn Server(comptime T: type) type {
         static_config: StaticConfig = .{ .dir = "./public", .prefix = "/" },
         config: Config = default_config,
         views_index: ?views_mod.ViewsIndex = null,
+        ws_hub: ?Hub = null,
+        ws_threaded: ?std.Io.Threaded = null,
 
         pub fn init() Self {
             env.autoLoad(std.heap.page_allocator);
@@ -431,6 +481,7 @@ pub fn Server(comptime T: type) type {
             if (self.views_index) |*idx| idx.deinit();
             self.route_middlewares.deinit(std.heap.page_allocator);
             self.router.deinit();
+            if (self.ws_hub) |*h| h.deinit();
             _ = self.spider_gpa.deinit();
             self.spider_arena.deinit();
         }
@@ -481,6 +532,16 @@ pub fn Server(comptime T: type) type {
         pub fn post(self: *Self, path: []const u8, comptime handler: anytype) *Self {
             const H = buildWrapper(handler, T);
             self.router.add(.POST, path, H) catch unreachable;
+            return self;
+        }
+
+        pub fn ws(self: *Self, path: []const u8, comptime handler: fn (*Ws) anyerror!void) *Self {
+            if (self.ws_hub == null) {
+                self.ws_threaded = std.Io.Threaded.init_single_threaded;
+                self.ws_hub = Hub.init(std.heap.smp_allocator, self.ws_threaded.?.io());
+            }
+            const H = buildWsWrapper(handler);
+            self.router.add(.GET, path, H) catch unreachable;
             return self;
         }
 
@@ -549,6 +610,7 @@ pub fn Server(comptime T: type) type {
                 ._db = if (self._db) |*d| @as(*const Database, d) else null,
                 ._driver_type = self._driver_type,
                 .decorations = if (@sizeOf(T) == 0) null else @as(*const anyopaque, @ptrCast(&self.decorations)),
+                .ws_hub = if (self.ws_hub) |*h| h else null,
                 .global_middlewares = self.global_middlewares[0..self.global_middleware_count],
                 .path_middlewares = self.path_middlewares[0..self.path_middleware_count],
                 .route_middlewares = self.route_middlewares.items,

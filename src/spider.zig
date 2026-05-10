@@ -23,6 +23,7 @@ pub const Router = @import("routing/router.zig").Router;
 pub const Group = @import("routing/group.zig").Group;
 pub const websocket = @import("ws/websocket.zig");
 pub const Hub = @import("ws/hub.zig").Hub;
+pub const Ws = @import("ws/ws.zig").Ws;
 pub const pg = @import("drivers/pg/pg.zig");
 pub const mysql = @import("drivers/mysql/mysql.zig");
 pub const auth = @import("modules/auth/auth.zig");

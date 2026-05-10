@@ -84,11 +84,14 @@ pub const Server = struct {
     }
 
     pub fn readFrame(self: *Server, arena: std.mem.Allocator) !?Frame {
+        std.debug.print("readFrame: reading 2-byte header...\n", .{});
         var header: [2]u8 = undefined;
         self.readAll(&header) catch |err| {
+            std.debug.print("readFrame: readAll header error: {s}\n", .{@errorName(err)});
             if (err == error.EndOfStream) return null;
             return err;
         };
+        std.debug.print("readFrame: header=[0x{x:0>2}, 0x{x:0>2}]\n", .{ header[0], header[1] });
 
         const first_byte = header[0];
         const fin = (first_byte & 0x80) != 0;
