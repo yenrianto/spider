@@ -59,6 +59,7 @@ pub const Ctx = struct {
     _io: std.Io = undefined,
     _stream: std.Io.net.Stream = undefined,
     _headers: std.StringHashMapUnmanaged([]const u8) = .{},
+    _decorations: ?*const anyopaque = null,
     _last_template: ?[]const u8 = null,
 
     pub fn db(self: *Ctx) DatabaseCtx {

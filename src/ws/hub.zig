@@ -11,6 +11,7 @@ pub const Hub = struct {
     pub const Connection = struct {
         id: u64,
         stream: net.Stream,
+        channel: []const u8 = "",
     };
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io) Hub {
@@ -29,6 +30,9 @@ pub const Hub = struct {
     pub fn add(self: *Hub, conn: Connection) !void {
         self.mutex.lock(self.io) catch return error.LockFailed;
         defer self.mutex.unlock(self.io);
+        for (self.connections.items) |c| {
+            if (c.id == conn.id) return error.DuplicateId;
+        }
         try self.connections.append(self.allocator, conn);
     }
 
@@ -55,6 +59,39 @@ pub const Hub = struct {
         defer snapshot.deinit(self.allocator);
         for (self.connections.items) |conn| {
             snapshot.append(self.allocator, conn) catch {};
+        }
+        self.mutex.unlock(self.io);
+
+        var dead: std.ArrayListUnmanaged(u64) = .empty;
+        defer dead.deinit(self.allocator);
+
+        for (snapshot.items) |conn| {
+            self.sendText(conn.stream, message) catch {
+                dead.append(self.allocator, conn.id) catch {};
+            };
+        }
+
+        if (dead.items.len == 0) return;
+        self.mutex.lock(self.io) catch return;
+        defer self.mutex.unlock(self.io);
+        for (dead.items) |id| {
+            for (self.connections.items, 0..) |conn, i| {
+                if (conn.id == id) {
+                    _ = self.connections.orderedRemove(i);
+                    break;
+                }
+            }
+        }
+    }
+
+    pub fn broadcastToChannel(self: *Hub, channel: []const u8, message: []const u8) void {
+        self.mutex.lock(self.io) catch return;
+        var snapshot: std.ArrayListUnmanaged(Connection) = .empty;
+        defer snapshot.deinit(self.allocator);
+        for (self.connections.items) |conn| {
+            if (std.mem.eql(u8, conn.channel, channel)) {
+                snapshot.append(self.allocator, conn) catch {};
+            }
         }
         self.mutex.unlock(self.io);
 
@@ -231,7 +268,7 @@ test "Hub: broadcast delivers to all connections" {
     try testing.expectEqual(@as(u8, msg.len), buf_b[1]);
 }
 
-test "Hub: add duplicate id leaves zombie connection" {
+test "Hub: add duplicate id returns error" {
     var threaded = std.Io.Threaded.init_single_threaded;
     const io = threaded.io();
     const sockets_a = try makeSocketPair();
@@ -244,9 +281,82 @@ test "Hub: add duplicate id leaves zombie connection" {
     defer hub.deinit();
 
     try hub.add(.{ .id = 7, .stream = .{ .socket = sockets_a[0] } });
-    try hub.add(.{ .id = 7, .stream = .{ .socket = sockets_b[0] } });
-    try testing.expectEqual(@as(usize, 2), hub.count());
-
-    hub.remove(7);
+    try testing.expectError(
+        error.DuplicateId,
+        hub.add(.{ .id = 7, .stream = .{ .socket = sockets_b[0] } }),
+    );
     try testing.expectEqual(@as(usize, 1), hub.count());
+}
+
+test "Hub: broadcastToChannel delivers only to matching channel" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets_a = try makeSocketPair();
+    const sockets_b = try makeSocketPair();
+    defer sockets_a[0].close(io);
+    defer sockets_a[1].close(io);
+    defer sockets_b[0].close(io);
+    defer sockets_b[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+
+    try hub.add(.{ .id = 1, .stream = .{ .socket = sockets_a[0] }, .channel = "room:1" });
+    try hub.add(.{ .id = 2, .stream = .{ .socket = sockets_b[0] }, .channel = "room:2" });
+
+    hub.broadcastToChannel("room:1", "hello");
+
+    var buf: [64]u8 = undefined;
+    var read_buf: [256]u8 = undefined;
+    var reader = net.Stream.Reader.init(.{ .socket = sockets_a[1] }, io, &read_buf);
+    try reader.interface.readSliceAll(buf[0..2]);
+    try testing.expectEqual(@as(u8, 0x81), buf[0]);
+
+    try (net.Stream{ .socket = sockets_b[0] }).shutdown(io, .send);
+}
+
+test "Hub: broadcast still delivers to all regardless of channel" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets_a = try makeSocketPair();
+    const sockets_b = try makeSocketPair();
+    defer sockets_a[0].close(io);
+    defer sockets_a[1].close(io);
+    defer sockets_b[0].close(io);
+    defer sockets_b[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+
+    try hub.add(.{ .id = 1, .stream = .{ .socket = sockets_a[0] }, .channel = "room:1" });
+    try hub.add(.{ .id = 2, .stream = .{ .socket = sockets_b[0] }, .channel = "room:2" });
+
+    hub.broadcast("global");
+
+    var buf_a: [64]u8 = undefined;
+    var read_buf_a: [256]u8 = undefined;
+    var reader_a = net.Stream.Reader.init(.{ .socket = sockets_a[1] }, io, &read_buf_a);
+    try reader_a.interface.readSliceAll(buf_a[0..2]);
+    try testing.expectEqual(@as(u8, 0x81), buf_a[0]);
+
+    var buf_b: [64]u8 = undefined;
+    var read_buf_b: [256]u8 = undefined;
+    var reader_b = net.Stream.Reader.init(.{ .socket = sockets_b[1] }, io, &read_buf_b);
+    try reader_b.interface.readSliceAll(buf_b[0..2]);
+    try testing.expectEqual(@as(u8, 0x81), buf_b[0]);
+}
+
+test "Hub: broadcastToChannel removes dead connection" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets = try makeSocketPair();
+    defer sockets[0].close(io);
+    defer sockets[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+
+    try hub.add(.{ .id = 1, .stream = .{ .socket = sockets[0] }, .channel = "room:1" });
+    try testing.expectEqual(@as(usize, 1), hub.count());
+
+    try (net.Stream{ .socket = sockets[0] }).shutdown(io, .send);
+    hub.broadcastToChannel("room:1", "msg");
+    try testing.expectEqual(@as(usize, 0), hub.count());
 }
