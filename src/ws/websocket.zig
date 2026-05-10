@@ -23,18 +23,22 @@ pub const Server = struct {
     allocator: std.mem.Allocator,
     _read_buf: [65536]u8 = undefined,
     _write_buf: [4096]u8 = undefined,
+    _reader: ?net.Stream.Reader = null,
 
     pub fn init(stream: net.Stream, io: std.Io, allocator: std.mem.Allocator) Server {
         return .{
             .stream = stream,
             .io = io,
             .allocator = allocator,
+            ._reader = null,
         };
     }
 
     fn readAll(self: *Server, buf: []u8) !void {
-        var sr = net.Stream.Reader.init(self.stream, self.io, &self._read_buf);
-        try sr.interface.readSliceAll(buf);
+        if (self._reader == null) {
+            self._reader = net.Stream.Reader.init(self.stream, self.io, &self._read_buf);
+        }
+        try self._reader.?.interface.readSliceAll(buf);
     }
 
     fn writeAll(self: *Server, data: []const u8) !void {
