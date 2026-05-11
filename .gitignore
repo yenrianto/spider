@@ -17,3 +17,10 @@ bench/
 src/main.zig
 memory.md
 demos/
+.playwright-mcp/
+src/cli/.playwright-mcp/
+SKILL_ZIG_016_APIS.md
+check_stream
+fix-coauthor.fish
+rsa_test.zig
+stream_check
