@@ -609,14 +609,14 @@ pub fn Server(comptime T: type) type {
             return self;
         }
 
-        pub fn get(self: *Self, path: []const u8, comptime handler: anytype) *Self {
-            const H = buildWrapper(handler, T);
+        pub fn get(self: *Self, path: []const u8, handler: anytype) *Self {
+            const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
             self.router.add(.GET, path, H) catch unreachable;
             return self;
         }
 
-        pub fn post(self: *Self, path: []const u8, comptime handler: anytype) *Self {
-            const H = buildWrapper(handler, T);
+        pub fn post(self: *Self, path: []const u8, handler: anytype) *Self {
+            const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
             self.router.add(.POST, path, H) catch unreachable;
             return self;
         }
