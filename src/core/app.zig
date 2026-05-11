@@ -130,14 +130,11 @@ const ConnCtx = struct {
 };
 
 fn workerLoop(wctx: WorkerCtx) void {
-    const tid = std.Thread.getCurrentId();
-    std.debug.print("Worker {d} started\n", .{tid});
-
     var group: std.Io.Group = .init;
 
     while (true) {
         const stream = wctx.listener.accept(wctx.io) catch |err| {
-            std.debug.print("Worker {d} accept error: {s}\n", .{ tid, @errorName(err) });
+            std.log.err("worker accept error: {s}", .{@errorName(err)});
             break;
         };
 
@@ -158,13 +155,12 @@ fn workerLoop(wctx: WorkerCtx) void {
             .path_middlewares = wctx.path_middlewares,
             .route_middlewares = wctx.route_middlewares,
         }}) catch |err| {
-            std.debug.print("Worker {d} concurrent error: {s}\n", .{ tid, @errorName(err) });
+            std.log.err("worker concurrent error: {s}", .{@errorName(err)});
             stream.close(wctx.io);
         };
     }
 
     group.await(wctx.io) catch {};
-    std.debug.print("Worker {d} finished\n", .{tid});
 }
 
 fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
@@ -393,25 +389,17 @@ fn buildWrapper(comptime handler: anytype, comptime T: type) Handler {
 fn buildWsWrapper(comptime handler: fn (*Ws) anyerror!void) Handler {
     const W = struct {
         pub fn call(ctx: *Ctx) anyerror!Response {
-            const hub = ctx._ws_hub orelse {
-                std.debug.print("buildWsWrapper: no hub\n", .{});
-                return ctx.text("", .{});
-            };
-            std.debug.print("buildWsWrapper: hub={*}, handshaking...\n", .{hub});
+            const hub = ctx._ws_hub orelse return ctx.text("", .{});
             var ws_server = websocket.Server.init(ctx._stream, ctx._io, ctx.arena);
             if (!try ws_server.handshake(ctx.arena, &ctx._headers)) {
-                std.debug.print("buildWsWrapper: handshake failed\n", .{});
                 return ctx.text("", .{});
             }
-            std.debug.print("buildWsWrapper: handshake OK\n", .{});
 
             var rand_buf: [8]u8 = undefined;
             std.Io.random(ctx._io, &rand_buf);
             const conn_id = std.mem.readInt(u64, &rand_buf, .little);
-            std.debug.print("buildWsWrapper: conn_id={d}\n", .{conn_id});
             try hub.add(.{ .id = conn_id, .stream = ctx._stream });
             defer hub.remove(conn_id);
-            std.debug.print("buildWsWrapper: added to hub, calling handler...\n", .{});
 
             var ws = Ws{
                 ._server = ws_server,
@@ -423,7 +411,6 @@ fn buildWsWrapper(comptime handler: fn (*Ws) anyerror!void) Handler {
             };
 
             try handler(&ws);
-            std.debug.print("buildWsWrapper: handler returned\n", .{});
             return ctx.text("", .{});
         }
     };
@@ -434,14 +421,16 @@ const IntervalEntry = struct {
     hub: *Hub,
     ms: u64,
     callback: *const fn (*Hub) void,
-    thread: std.Thread,
+    io: std.Io,
 };
 
 fn intervalLoop(entry: IntervalEntry) void {
-    var threaded = std.Io.Threaded.init_single_threaded;
-    const io = threaded.io();
     while (true) {
-        std.Io.sleep(io, std.Io.Duration.fromMilliseconds(@as(i64, @intCast(entry.ms))), .real) catch {};
+        std.Io.sleep(
+            entry.io,
+            std.Io.Duration.fromMilliseconds(@as(i64, @intCast(entry.ms))),
+            .real,
+        ) catch {};
         entry.callback(entry.hub);
     }
 }
@@ -574,14 +563,12 @@ pub fn Server(comptime T: type) type {
                 }
             }.handle);
             self.router.add(.GET, path, H) catch unreachable;
-            var entry = IntervalEntry{
+            self.interval_threads.append(std.heap.smp_allocator, .{
                 .hub = &self.ws_hub.?,
                 .ms = ms,
                 .callback = callback,
-                .thread = undefined,
-            };
-            entry.thread = std.Thread.spawn(.{}, intervalLoop, .{entry}) catch return self;
-            entry.thread.detach();
+                .io = undefined,
+            }) catch {};
             return self;
         }
 
@@ -616,8 +603,6 @@ pub fn Server(comptime T: type) type {
             const port = options.port orelse self.config.port;
             const host = options.host orelse self.config.host;
 
-            std.debug.print("Speed server starting on port {d}...\n", .{port});
-
             const gpa = std.heap.smp_allocator;
 
             var threaded: Io.Threaded = .init(gpa, .{});
@@ -628,10 +613,15 @@ pub fn Server(comptime T: type) type {
             var listener = try address.listen(io, .{ .reuse_address = true });
             defer listener.deinit(io);
 
-            std.debug.print("Server listening on http://{s}:{d}\n", .{ host, port });
+            std.log.info("Server listening on http://{s}:{d}", .{ host, port });
+
+            for (self.interval_threads.items) |*entry| {
+                entry.io = io;
+                const t = std.Thread.spawn(.{}, intervalLoop, .{entry.*}) catch continue;
+                t.detach();
+            }
 
             const cpu_count = std.Thread.getCpuCount() catch 2;
-            std.debug.print("Starting {d} worker threads\n", .{cpu_count});
 
             const threads = try gpa.alloc(std.Thread, cpu_count);
             defer gpa.free(threads);
@@ -658,7 +648,7 @@ pub fn Server(comptime T: type) type {
 
             for (threads) |*t| {
                 t.* = std.Thread.spawn(.{}, workerLoop, .{worker_ctx}) catch |err| {
-                    std.debug.print("Failed to spawn thread: {s}\n", .{@errorName(err)});
+                    std.log.err("failed to spawn worker thread: {s}", .{@errorName(err)});
                     continue;
                 };
             }
@@ -680,11 +670,10 @@ pub fn server() Server(EmptyDeco) {
 
 pub fn app(decorations: anytype) AppType(@TypeOf(decorations)) {
     if (@hasDecl(@import("spider_config"), "is_default")) {
-        std.debug.print(
-            "[spider] WARNING: No spider.config.zig found.\n" ++
-                "[spider]          Running with defaults: views_dir=\"./views\", port=3000, env=development.\n" ++
-                "[spider]          Runtime template loading may not work without it.\n" ++
-                "[spider]          Create spider.config.zig in your project root to customize.\n",
+        std.log.warn(
+            "No spider.config.zig found. Running with defaults: views_dir=\"./views\", port=3000, env=development. " ++
+                "Runtime template loading may not work without it. " ++
+                "Create spider.config.zig in your project root to customize.",
             .{},
         );
     }
