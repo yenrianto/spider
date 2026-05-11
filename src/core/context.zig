@@ -368,14 +368,14 @@ pub const Ctx = struct {
         return null;
     }
 
-    pub fn redirect(_: *Ctx, url: []const u8) !Response {
+    pub fn redirect(self: *Ctx, url: []const u8) !Response {
+        const hdrs = try self.arena.alloc([2][]const u8, 1);
+        hdrs[0] = .{ "Location", url };
         return Response{
             .status = .found,
             .body = null,
             .content_type = "text/plain",
-            .headers = &.{
-                .{ "Location", url },
-            },
+            .headers = hdrs,
         };
     }
 

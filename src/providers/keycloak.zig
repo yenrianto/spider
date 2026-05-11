@@ -12,7 +12,9 @@ pub const KeycloakConfig = struct {
     client_id: []const u8,
     client_secret: []const u8,
     redirect_uri: []const u8 = "http://localhost:3000/auth/callback",
+    login_path: []const u8 = "/auth/login",
     after_callback_path: []const u8 = "/",
+    auth_skip_paths: []const []const u8 = &.{},
 };
 
 pub const Keycloak = struct {
@@ -27,7 +29,9 @@ pub const Keycloak = struct {
         const jwks_auth = try JwksAuth.init(allocator, io, .{
             .jwks_url = jwks_url,
             .issuer = issuer,
+            .login_path = config.login_path,
             .after_callback_path = config.after_callback_path,
+            .auth_skip_paths = config.auth_skip_paths,
         });
         return Keycloak{
             .jwks = jwks_auth,
@@ -52,6 +56,17 @@ pub const Keycloak = struct {
         );
     }
 
+    pub fn loginHandler(self: *Keycloak) Handler {
+        const S = struct {
+            var instance: ?*Keycloak = null;
+            fn h(c: *Ctx) anyerror!Response {
+                return instance.?.loginFn(c);
+            }
+        };
+        S.instance = self;
+        return S.h;
+    }
+
     pub fn callbackHandler(self: *Keycloak) Handler {
         const S = struct {
             var instance: ?*Keycloak = null;
@@ -61,6 +76,14 @@ pub const Keycloak = struct {
         };
         S.instance = self;
         return S.h;
+    }
+
+    fn loginFn(self: *Keycloak, c: *Ctx) !Response {
+        var rand_buf: [8]u8 = undefined;
+        std.Io.random(c._io, &rand_buf);
+        const state = std.fmt.bytesToHex(rand_buf, .lower);
+        const url = try self.authUrl(&state);
+        return c.redirect(url);
     }
 
     fn callbackFn(self: *Keycloak, c: *Ctx) !Response {
@@ -98,12 +121,12 @@ pub const Keycloak = struct {
             .max_age = 86400 * 7,
         });
 
+        const hdrs = try c.arena.alloc([2][]const u8, 2);
+        hdrs[0] = .{ "Location", self.config.after_callback_path };
+        hdrs[1] = .{ "Set-Cookie", cookie_str };
         return Response{
             .status = .found,
-            .headers = &.{
-                .{ "Location", self.config.after_callback_path },
-                .{ "Set-Cookie", cookie_str },
-            },
+            .headers = hdrs,
         };
     }
 };

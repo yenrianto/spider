@@ -18,7 +18,9 @@ pub const JwksConfig = struct {
     issuer: ?[]const u8 = null,
     audience: ?[]const u8 = null,
     cookie_name: []const u8 = "__session",
+    login_path: []const u8 = "/login",
     after_callback_path: []const u8 = "/",
+    auth_skip_paths: []const []const u8 = &.{},
 };
 
 pub const Claims = struct {
@@ -162,8 +164,17 @@ pub const JwksAuth = struct {
     }
 
     fn middlewareFn(self: *JwksAuth, c: *Ctx, next: NextFn) !Response {
+        const full_path = c.getPath();
+        const path = if (std.mem.indexOfScalar(u8, full_path, '?')) |q|
+            full_path[0..q]
+        else
+            full_path;
+        for (self.config.auth_skip_paths) |skip| {
+            if (std.mem.eql(u8, path, skip)) return next(c);
+        }
+
         const token = extractToken(c, self.config.cookie_name) orelse
-            return c.redirect("/login");
+            return redirect(c, self.config.login_path);
 
         const claims = self.verifyToken(c.arena, token) catch |err| switch (err) {
             error.InvalidToken,
@@ -201,6 +212,13 @@ pub const JwksAuth = struct {
         return next(c);
     }
 };
+
+fn redirect(c: *Ctx, url: []const u8) Response {
+    const headers = c.arena.alloc([2][]const u8, 1) catch
+        return Response{ .status = .found, .body = url, .content_type = "text/plain" };
+    headers[0] = .{ "Location", url };
+    return Response{ .status = .found, .body = null, .content_type = "text/plain", .headers = headers };
+}
 
 fn extractToken(c: *Ctx, cookie_name: []const u8) ?[]const u8 {
     if (c.header("Authorization")) |auth| {

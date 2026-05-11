@@ -11,6 +11,7 @@ pub const ClerkConfig = struct {
     publishable_key: []const u8,
     secret_key: []const u8,
     redirect_uri: []const u8 = "http://localhost:3000/auth/callback",
+    login_path: []const u8 = "/login",
     after_callback_path: []const u8 = "/",
 };
 
@@ -27,6 +28,7 @@ pub const Clerk = struct {
             .jwks_url = jwks_url,
             .issuer = domain,
             .cookie_name = "__session",
+            .login_path = config.login_path,
             .after_callback_path = config.after_callback_path,
         });
         return Clerk{
