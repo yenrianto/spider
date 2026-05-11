@@ -430,6 +430,22 @@ fn buildWsWrapper(comptime handler: fn (*Ws) anyerror!void) Handler {
     return W.call;
 }
 
+const IntervalEntry = struct {
+    hub: *Hub,
+    ms: u64,
+    callback: *const fn (*Hub) void,
+    thread: std.Thread,
+};
+
+fn intervalLoop(entry: IntervalEntry) void {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    while (true) {
+        std.Io.sleep(io, std.Io.Duration.fromMilliseconds(@as(i64, @intCast(entry.ms))), .real) catch {};
+        entry.callback(entry.hub);
+    }
+}
+
 pub fn Server(comptime T: type) type {
     return struct {
         const Self = @This();
@@ -453,6 +469,7 @@ pub fn Server(comptime T: type) type {
         views_index: ?views_mod.ViewsIndex = null,
         ws_hub: ?Hub = null,
         ws_threaded: ?std.Io.Threaded = null,
+        interval_threads: std.ArrayListUnmanaged(IntervalEntry) = .empty,
 
         pub fn init() Self {
             env.autoLoad(std.heap.page_allocator);
@@ -482,6 +499,7 @@ pub fn Server(comptime T: type) type {
             self.route_middlewares.deinit(std.heap.page_allocator);
             self.router.deinit();
             if (self.ws_hub) |*h| h.deinit();
+            self.interval_threads.deinit(std.heap.smp_allocator);
             _ = self.spider_gpa.deinit();
             self.spider_arena.deinit();
         }
@@ -542,6 +560,28 @@ pub fn Server(comptime T: type) type {
             }
             const H = buildWsWrapper(handler);
             self.router.add(.GET, path, H) catch unreachable;
+            return self;
+        }
+
+        pub fn wsInterval(self: *Self, path: []const u8, ms: u64, comptime callback: fn (*Hub) void) *Self {
+            if (self.ws_hub == null) {
+                self.ws_threaded = std.Io.Threaded.init_single_threaded;
+                self.ws_hub = Hub.init(std.heap.smp_allocator, self.ws_threaded.?.io());
+            }
+            const H = buildWsWrapper(struct {
+                fn handle(w: *Ws) anyerror!void {
+                    while (try w.next()) |_| {}
+                }
+            }.handle);
+            self.router.add(.GET, path, H) catch unreachable;
+            var entry = IntervalEntry{
+                .hub = &self.ws_hub.?,
+                .ms = ms,
+                .callback = callback,
+                .thread = undefined,
+            };
+            entry.thread = std.Thread.spawn(.{}, intervalLoop, .{entry}) catch return self;
+            entry.thread.detach();
             return self;
         }
 
