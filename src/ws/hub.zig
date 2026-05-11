@@ -12,6 +12,7 @@ pub const Hub = struct {
         id: u64,
         stream: net.Stream,
         channel: []const u8 = "",
+        type: enum { ws, sse } = .ws,
     };
 
     pub fn init(allocator: std.mem.Allocator, io: std.Io) Hub {
@@ -77,9 +78,14 @@ pub const Hub = struct {
         defer dead.deinit(self.allocator);
 
         for (snapshot.items) |conn| {
-            self.sendText(conn.stream, message) catch {
-                dead.append(self.allocator, conn.id) catch {};
-            };
+            switch (conn.type) {
+                .ws => self.sendText(conn.stream, message) catch {
+                    dead.append(self.allocator, conn.id) catch {};
+                },
+                .sse => self.sendSse(conn.stream, "message", message) catch {
+                    dead.append(self.allocator, conn.id) catch {};
+                },
+            }
         }
 
         if (dead.items.len == 0) return;
@@ -102,25 +108,81 @@ pub const Hub = struct {
     }
 
     pub fn emit(self: *Hub, event: []const u8, data: anytype) void {
-        const Payload = struct {
-            event: []const u8,
-            data: @TypeOf(data),
-        };
-        const payload = Payload{ .event = event, .data = data };
-        const json = std.json.Stringify.valueAlloc(self.allocator, payload, .{}) catch return;
+        const json = std.json.Stringify.valueAlloc(self.allocator, data, .{}) catch return;
         defer self.allocator.free(json);
-        self.broadcast(json);
+        self.broadcastEvent(event, json);
     }
 
     pub fn emitTo(self: *Hub, channel: []const u8, event: []const u8, data: anytype) void {
-        const Payload = struct {
-            event: []const u8,
-            data: @TypeOf(data),
-        };
-        const payload = Payload{ .event = event, .data = data };
-        const json = std.json.Stringify.valueAlloc(self.allocator, payload, .{}) catch return;
+        const json = std.json.Stringify.valueAlloc(self.allocator, data, .{}) catch return;
         defer self.allocator.free(json);
-        self.broadcastToChannel(channel, json);
+        self.broadcastToChannelEvent(channel, event, json);
+    }
+
+    fn broadcastEvent(self: *Hub, event: []const u8, data: []const u8) void {
+        self.mutex.lock(self.io) catch return;
+        var snapshot: std.ArrayListUnmanaged(Connection) = .empty;
+        defer snapshot.deinit(self.allocator);
+        for (self.connections.items) |conn| {
+            if (conn.type == .sse) {
+                snapshot.append(self.allocator, conn) catch {};
+            }
+        }
+        self.mutex.unlock(self.io);
+
+        var dead: std.ArrayListUnmanaged(u64) = .empty;
+        defer dead.deinit(self.allocator);
+
+        for (snapshot.items) |conn| {
+            self.sendSse(conn.stream, event, data) catch {
+                dead.append(self.allocator, conn.id) catch {};
+            };
+        }
+
+        if (dead.items.len == 0) return;
+        self.mutex.lock(self.io) catch return;
+        defer self.mutex.unlock(self.io);
+        for (dead.items) |id| {
+            for (self.connections.items, 0..) |conn, i| {
+                if (conn.id == id) {
+                    _ = self.connections.orderedRemove(i);
+                    break;
+                }
+            }
+        }
+    }
+
+    fn broadcastToChannelEvent(self: *Hub, channel: []const u8, event: []const u8, data: []const u8) void {
+        self.mutex.lock(self.io) catch return;
+        var snapshot: std.ArrayListUnmanaged(Connection) = .empty;
+        defer snapshot.deinit(self.allocator);
+        for (self.connections.items) |conn| {
+            if (conn.type == .sse and std.mem.eql(u8, conn.channel, channel)) {
+                snapshot.append(self.allocator, conn) catch {};
+            }
+        }
+        self.mutex.unlock(self.io);
+
+        var dead: std.ArrayListUnmanaged(u64) = .empty;
+        defer dead.deinit(self.allocator);
+
+        for (snapshot.items) |conn| {
+            self.sendSse(conn.stream, event, data) catch {
+                dead.append(self.allocator, conn.id) catch {};
+            };
+        }
+
+        if (dead.items.len == 0) return;
+        self.mutex.lock(self.io) catch return;
+        defer self.mutex.unlock(self.io);
+        for (dead.items) |id| {
+            for (self.connections.items, 0..) |conn, i| {
+                if (conn.id == id) {
+                    _ = self.connections.orderedRemove(i);
+                    break;
+                }
+            }
+        }
     }
 
     pub fn broadcastToChannel(self: *Hub, channel: []const u8, message: []const u8) void {
@@ -138,9 +200,14 @@ pub const Hub = struct {
         defer dead.deinit(self.allocator);
 
         for (snapshot.items) |conn| {
-            self.sendText(conn.stream, message) catch {
-                dead.append(self.allocator, conn.id) catch {};
-            };
+            switch (conn.type) {
+                .ws => self.sendText(conn.stream, message) catch {
+                    dead.append(self.allocator, conn.id) catch {};
+                },
+                .sse => self.sendSse(conn.stream, "message", message) catch {
+                    dead.append(self.allocator, conn.id) catch {};
+                },
+            }
         }
 
         if (dead.items.len == 0) return;
@@ -154,6 +221,18 @@ pub const Hub = struct {
                 }
             }
         }
+    }
+
+    fn sendSse(self: *Hub, stream: net.Stream, event: []const u8, data: []const u8) !void {
+        var write_buf: [4096]u8 = undefined;
+        var sw = net.Stream.Writer.init(stream, self.io, &write_buf);
+        const writer = &sw.interface;
+        try writer.writeAll("event: ");
+        try writer.writeAll(event);
+        try writer.writeAll("\ndata: ");
+        try writer.writeAll(data);
+        try writer.writeAll("\n\n");
+        try writer.flush();
     }
 
     fn sendText(self: *Hub, stream: net.Stream, text: []const u8) !void {

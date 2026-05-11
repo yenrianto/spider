@@ -47,6 +47,7 @@ pub const Response = struct {
     content_type: []const u8 = "text/plain",
     headers: []const [2][]const u8 = &.{},
     cookies: []const [2][]const u8 = &.{},
+    raw: bool = false,
 };
 
 pub const Ctx = struct {
@@ -63,6 +64,7 @@ pub const Ctx = struct {
     _decorations: ?*const anyopaque = null,
     _last_template: ?[]const u8 = null,
     _ws_hub: ?*Hub = null,
+    _sse_hub: ?*Hub = null,
 
     pub fn db(self: *Ctx) DatabaseCtx {
         return .{
@@ -379,6 +381,10 @@ pub const Ctx = struct {
 
     pub fn wsHub(self: *Ctx) *Hub {
         return self._ws_hub orelse @panic("wsHub: no hub attached — use server.ws()");
+    }
+
+    pub fn sseHub(self: *Ctx) *Hub {
+        return self._sse_hub orelse @panic("sseHub: no SSE hub — use server.sse()");
     }
 
     pub fn getPath(self: *Ctx) []const u8 {
