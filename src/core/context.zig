@@ -377,6 +377,10 @@ pub const Ctx = struct {
         };
     }
 
+    pub fn wsHub(self: *Ctx) *Hub {
+        return self._ws_hub orelse @panic("wsHub: no hub attached — use server.ws()");
+    }
+
     pub fn getPath(self: *Ctx) []const u8 {
         return self.request.head.target;
     }

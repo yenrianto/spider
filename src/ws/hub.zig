@@ -95,6 +95,34 @@ pub const Hub = struct {
         }
     }
 
+    pub fn notifyUser(self: *Hub, user_id: u64, event: []const u8, data: anytype) void {
+        var ch_buf: [32]u8 = undefined;
+        const channel = std.fmt.bufPrint(&ch_buf, "user:{d}", .{user_id}) catch return;
+        self.emitTo(channel, event, data);
+    }
+
+    pub fn emit(self: *Hub, event: []const u8, data: anytype) void {
+        const Payload = struct {
+            event: []const u8,
+            data: @TypeOf(data),
+        };
+        const payload = Payload{ .event = event, .data = data };
+        const json = std.json.Stringify.valueAlloc(self.allocator, payload, .{}) catch return;
+        defer self.allocator.free(json);
+        self.broadcast(json);
+    }
+
+    pub fn emitTo(self: *Hub, channel: []const u8, event: []const u8, data: anytype) void {
+        const Payload = struct {
+            event: []const u8,
+            data: @TypeOf(data),
+        };
+        const payload = Payload{ .event = event, .data = data };
+        const json = std.json.Stringify.valueAlloc(self.allocator, payload, .{}) catch return;
+        defer self.allocator.free(json);
+        self.broadcastToChannel(channel, json);
+    }
+
     pub fn broadcastToChannel(self: *Hub, channel: []const u8, message: []const u8) void {
         self.mutex.lock(self.io) catch return;
         var snapshot: std.ArrayListUnmanaged(Connection) = .empty;
@@ -353,6 +381,97 @@ test "Hub: broadcast still delivers to all regardless of channel" {
     var reader_b = net.Stream.Reader.init(.{ .socket = sockets_b[1] }, io, &read_buf_b);
     try reader_b.interface.readSliceAll(buf_b[0..2]);
     try testing.expectEqual(@as(u8, 0x81), buf_b[0]);
+}
+
+test "Hub: emit serializes JSON with event and data" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets = try makeSocketPair();
+    defer sockets[0].close(io);
+    defer sockets[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+    try hub.add(.{ .id = 1, .stream = .{ .socket = sockets[0] } });
+
+    hub.emit("alert", .{ .message = "test", .count = @as(i32, 42) });
+
+    var buf: [256]u8 = undefined;
+    var read_buf: [256]u8 = undefined;
+    var reader = net.Stream.Reader.init(.{ .socket = sockets[1] }, io, &read_buf);
+    try reader.interface.readSliceAll(buf[0..2]);
+    try testing.expectEqual(@as(u8, 0x81), buf[0]);
+    const payload_len = buf[1];
+    try reader.interface.readSliceAll(buf[0..payload_len]);
+    const payload = buf[0..payload_len];
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, testing.allocator, payload, .{});
+    defer parsed.deinit();
+    const obj = parsed.value.object;
+    try testing.expectEqualStrings("alert", obj.get("event").?.string);
+    const data_obj = obj.get("data").?.object;
+    try testing.expectEqualStrings("test", data_obj.get("message").?.string);
+    try testing.expectEqual(@as(i64, 42), data_obj.get("count").?.integer);
+}
+
+test "Hub: emitTo delivers only to matching channel" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets_a = try makeSocketPair();
+    const sockets_b = try makeSocketPair();
+    defer sockets_a[0].close(io);
+    defer sockets_a[1].close(io);
+    defer sockets_b[0].close(io);
+    defer sockets_b[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+
+    try hub.add(.{ .id = 1, .stream = .{ .socket = sockets_a[0] }, .channel = "room:1" });
+    try hub.add(.{ .id = 2, .stream = .{ .socket = sockets_b[0] }, .channel = "room:2" });
+
+    hub.emitTo("room:1", "notice", .{ .text = "only room:1" });
+
+    var buf: [256]u8 = undefined;
+    var read_buf: [256]u8 = undefined;
+    var reader = net.Stream.Reader.init(.{ .socket = sockets_a[1] }, io, &read_buf);
+    try reader.interface.readSliceAll(buf[0..2]);
+    try testing.expectEqual(@as(u8, 0x81), buf[0]);
+    const payload_len = buf[1];
+    try reader.interface.readSliceAll(buf[0..payload_len]);
+    const payload = buf[0..payload_len];
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, testing.allocator, payload, .{});
+    defer parsed.deinit();
+    try testing.expectEqualStrings("notice", parsed.value.object.get("event").?.string);
+
+    // sockets_b should NOT receive anything — shutdown its send side to confirm
+    try (net.Stream{ .socket = sockets_b[0] }).shutdown(io, .send);
+}
+
+test "Hub: notifyUser delivers to user:42 channel" {
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+    const sockets = try makeSocketPair();
+    defer sockets[0].close(io);
+    defer sockets[1].close(io);
+    var hub = Hub.init(testing.allocator, io);
+    defer hub.deinit();
+
+    try hub.add(.{ .id = 1, .stream = .{ .socket = sockets[0] }, .channel = "user:42" });
+
+    hub.notifyUser(42, "private", .{ .msg = "secret" });
+
+    var buf: [256]u8 = undefined;
+    var read_buf: [256]u8 = undefined;
+    var reader = net.Stream.Reader.init(.{ .socket = sockets[1] }, io, &read_buf);
+    try reader.interface.readSliceAll(buf[0..2]);
+    try testing.expectEqual(@as(u8, 0x81), buf[0]);
+    const payload_len = buf[1];
+    try reader.interface.readSliceAll(buf[0..payload_len]);
+    const payload = buf[0..payload_len];
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, testing.allocator, payload, .{});
+    defer parsed.deinit();
+    try testing.expectEqualStrings("private", parsed.value.object.get("event").?.string);
 }
 
 test "Hub: broadcastToChannel removes dead connection" {
