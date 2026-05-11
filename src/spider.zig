@@ -39,6 +39,9 @@ pub const zmd = @import("render/zmd/zmd.zig");
 pub const form = @import("binding/form.zig");
 pub const form_parser = @import("binding/form_parser.zig");
 pub const google = @import("providers/google.zig");
+pub const jwks = @import("providers/jwks.zig");
+pub const clerk = @import("providers/clerk.zig");
+pub const keycloak = @import("providers/keycloak.zig");
 pub const http_client = @import("pacman");
 
 var global_ws_hub: ?*Hub = null;
