@@ -289,8 +289,28 @@ fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
                 ._ws_hub = ctx.ws_hub,
                 ._sse_hub = ctx.sse_hub,
             };
-            break :blk ctx_req.text("404 Not Found", .{ .status = .not_found }) catch
-                Response{ .status = .not_found, .body = "404 Not Found", .content_type = "text/plain" };
+            var mw_buf_404: [64]MiddlewareFn = undefined;
+            const mw_count_404 = collectMiddlewares(ctx.global_middlewares, ctx.path_middlewares, path, &.{}, &mw_buf_404);
+            const notFoundHandler: Handler = struct {
+                fn h(c: *Ctx) anyerror!Response {
+                    return c.text("404 Not Found", .{ .status = .not_found }) catch
+                        Response{ .status = .not_found, .body = "404 Not Found", .content_type = "text/plain" };
+                }
+            }.h;
+            break :blk if (mw_count_404 > 0)
+                runChain(&ctx_req, mw_buf_404[0..mw_count_404], notFoundHandler) catch |err| r: {
+                    if (ctx.error_handler) |eh| {
+                        break :r eh(&ctx_req, err) catch Response{
+                            .status = .internal_server_error,
+                            .body = "Internal Server Error",
+                            .content_type = "text/plain",
+                        };
+                    }
+                    break :r Response{ .status = .not_found, .body = "404 Not Found", .content_type = "text/plain" };
+                }
+            else
+                ctx_req.text("404 Not Found", .{ .status = .not_found }) catch
+                    Response{ .status = .not_found, .body = "404 Not Found", .content_type = "text/plain" };
         };
 
         var extra_headers_buf: [32]std.http.Header = undefined;
@@ -422,7 +442,7 @@ fn buildWsWrapper(comptime handler: fn (*Ws) anyerror!void) Handler {
             };
 
             try handler(&ws);
-            return Response{ .raw = true };
+            return Response{ .raw = true, .status = .switching_protocols };
         }
     };
     return W.call;

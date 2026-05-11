@@ -31,6 +31,7 @@ pub const auth = @import("modules/auth/auth.zig");
 pub const static = @import("modules/static.zig");
 pub const dashboard = @import("modules/dashboard.zig");
 pub const livereload = @import("modules/livereload.zig");
+pub const logger = @import("modules/logger.zig").middleware;
 pub const metrics = @import("internal/metrics.zig");
 pub const env = @import("internal/env.zig");
 pub const template = @import("render/template.zig");
