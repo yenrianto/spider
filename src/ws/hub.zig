@@ -12,6 +12,7 @@ pub const Hub = struct {
         id: u64,
         stream: net.Stream,
         channel: []const u8 = "",
+        namespace: []const u8 = "",
         type: enum { ws, sse } = .ws,
     };
 

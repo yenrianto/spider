@@ -946,15 +946,7 @@ fn renderNode(node: Node, ctx: *Context, alc: std.mem.Allocator, result: *std.Ar
             if (std.mem.eql(u8, expr, "slot")) {
                 if (ctx.get("slot")) |value| {
                     if (value == .string and value.string.len > 0) {
-                        var slot_parser = Parser.init(alc, value.string);
-                        const slot_result = try slot_parser.parse();
-                        defer {
-                            for (slot_result.nodes) |n| freeNode(n, alc);
-                            alc.free(slot_result.nodes);
-                        }
-                        for (slot_result.nodes) |n| {
-                            try renderNode(n, ctx, alc, result, components);
-                        }
+                        try result.appendSlice(alc, value.string);
                     }
                 }
             } else {
@@ -1050,7 +1042,17 @@ fn renderNode(node: Node, ctx: *Context, alc: std.mem.Allocator, result: *std.Ar
                     }
 
                     if (comp.slot_content) |sc| {
-                        try comp_ctx.set(alc, "slot", Value{ .string = try alc.dupe(u8, sc) });
+                        var slot_parser = Parser.init(alc, sc);
+                        const slot_result = try slot_parser.parse();
+                        defer {
+                            for (slot_result.nodes) |n| freeNode(n, alc);
+                            alc.free(slot_result.nodes);
+                        }
+                        var slot_buf = std.ArrayList(u8).empty;
+                        for (slot_result.nodes) |n| {
+                            try renderNode(n, &comp_ctx, alc, &slot_buf, components);
+                        }
+                        try comp_ctx.set(alc, "slot", Value{ .string = try slot_buf.toOwnedSlice(alc) });
                     }
 
                     for (comp_nodes.nodes) |n| {
@@ -1597,4 +1599,36 @@ test "double braces passthrough - alpine x-data" {
     defer alc.free(result);
     try std.testing.expect(std.mem.indexOf(u8, result, "{open: false}") != null);
     try std.testing.expect(std.mem.indexOf(u8, result, "content") != null);
+}
+
+test "escaped braces survive extends layout slot re-parsing" {
+    const alc = std.testing.allocator;
+    const layout_html = "<html><body>{ slot }</body></html>";
+    const page_html =
+        \\extends "layout"
+        \\<div x-data="{{ message: 'waiting...' }}">
+        \\  <p x-html="message"></p>
+        \\</div>
+        \\<script>
+        \\ws.onmessage = (e) => {{ message = e.data }};
+        \\</script>
+    ;
+    var components = std.StringHashMapUnmanaged([]const u8){};
+    try components.put(alc, try alc.dupe(u8, "layout"), try alc.dupe(u8, layout_html));
+    defer {
+        var iter = components.iterator();
+        while (iter.next()) |entry| {
+            alc.free(entry.key_ptr.*);
+            alc.free(entry.value_ptr.*);
+        }
+        components.deinit(alc);
+    }
+    var tmpl = try Template.init(alc, page_html);
+    defer tmpl.deinit();
+    tmpl.components = components;
+    const result = try tmpl.render(.{ .message = "Hello" }, alc);
+    defer alc.free(result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "{ message: 'waiting...' }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "{ message = e.data }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "<p x-html=\"message\">") != null);
 }

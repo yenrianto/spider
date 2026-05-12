@@ -24,6 +24,12 @@ const Ws = @import("../ws/ws.zig").Ws;
 const Sse = @import("../ws/sse.zig").Sse;
 const websocket = @import("../ws/websocket.zig");
 
+const WsRouteHub = struct {
+    handler: Handler,
+    hub: *Hub,
+    threaded: std.Io.Threaded,
+};
+
 threadlocal var chain_middlewares: []const MiddlewareFn = &.{};
 threadlocal var chain_handler: ?Handler = null;
 
@@ -106,7 +112,7 @@ const WorkerCtx = struct {
     _db: ?*const Database,
     _driver_type: DriverType,
     decorations: ?*const anyopaque,
-    ws_hub: ?*Hub,
+    ws_route_hubs: []const WsRouteHub,
     sse_hub: ?*Hub,
     global_middlewares: []const MiddlewareFn,
     path_middlewares: []const PathMiddlewareEntry,
@@ -125,7 +131,7 @@ const ConnCtx = struct {
     _db: ?*const Database,
     _driver_type: DriverType,
     decorations: ?*const anyopaque,
-    ws_hub: ?*Hub,
+    ws_route_hubs: []const WsRouteHub,
     sse_hub: ?*Hub,
     global_middlewares: []const MiddlewareFn,
     path_middlewares: []const PathMiddlewareEntry,
@@ -153,7 +159,7 @@ fn workerLoop(wctx: WorkerCtx) void {
             ._db = wctx._db,
             ._driver_type = wctx._driver_type,
             .decorations = wctx.decorations,
-            .ws_hub = wctx.ws_hub,
+            .ws_route_hubs = wctx.ws_route_hubs,
             .sse_hub = wctx.sse_hub,
             .global_middlewares = wctx.global_middlewares,
             .path_middlewares = wctx.path_middlewares,
@@ -235,6 +241,13 @@ fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
 
         const match = ctx.router.match(request.head.method, path, arena) catch null;
         const response = if (match) |m| blk: {
+            var matched_hub: ?*Hub = null;
+            for (ctx.ws_route_hubs) |rh| {
+                if (rh.handler == m.handler) {
+                    matched_hub = rh.hub;
+                    break;
+                }
+            }
             var ctx_req = Ctx{
                 .request = request,
                 .arena = arena,
@@ -247,7 +260,7 @@ fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
                 ._stream = ctx.stream,
                 ._headers = headers_map,
                 ._decorations = ctx.decorations,
-                ._ws_hub = ctx.ws_hub,
+                ._ws_hub = matched_hub,
                 ._sse_hub = ctx.sse_hub,
             };
 
@@ -286,7 +299,7 @@ fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
                 ._stream = ctx.stream,
                 ._headers = headers_map,
                 ._decorations = ctx.decorations,
-                ._ws_hub = ctx.ws_hub,
+                ._ws_hub = null,
                 ._sse_hub = ctx.sse_hub,
             };
             var mw_buf_404: [64]MiddlewareFn = undefined;
@@ -532,8 +545,7 @@ pub fn Server(comptime T: type) type {
         static_config: StaticConfig = .{ .dir = "./public", .prefix = "/" },
         config: Config = default_config,
         views_index: ?views_mod.ViewsIndex = null,
-        ws_hub: ?Hub = null,
-        ws_threaded: ?std.Io.Threaded = null,
+        ws_route_hubs: std.ArrayListUnmanaged(WsRouteHub) = .empty,
         sse_hub: ?Hub = null,
         sse_threaded: ?std.Io.Threaded = null,
         interval_threads: std.ArrayListUnmanaged(IntervalEntry) = .empty,
@@ -565,7 +577,11 @@ pub fn Server(comptime T: type) type {
             if (self.views_index) |*idx| idx.deinit();
             self.route_middlewares.deinit(std.heap.page_allocator);
             self.router.deinit();
-            if (self.ws_hub) |*h| h.deinit();
+            for (self.ws_route_hubs.items) |*rh| {
+                rh.hub.deinit();
+                std.heap.smp_allocator.destroy(rh.hub);
+            }
+            self.ws_route_hubs.deinit(std.heap.smp_allocator);
             if (self.sse_hub) |*h| h.deinit();
             self.interval_threads.deinit(std.heap.smp_allocator);
             _ = self.spider_gpa.deinit();
@@ -622,28 +638,36 @@ pub fn Server(comptime T: type) type {
         }
 
         pub fn ws(self: *Self, path: []const u8, comptime handler: fn (*Ws) anyerror!void) *Self {
-            if (self.ws_hub == null) {
-                self.ws_threaded = std.Io.Threaded.init_single_threaded;
-                self.ws_hub = Hub.init(std.heap.smp_allocator, self.ws_threaded.?.io());
-            }
+            var threaded = std.Io.Threaded.init_single_threaded;
+            const hub_ptr = std.heap.smp_allocator.create(Hub) catch unreachable;
+            hub_ptr.* = Hub.init(std.heap.smp_allocator, threaded.io());
             const H = buildWsWrapper(handler);
             self.router.add(.GET, path, H) catch unreachable;
+            self.ws_route_hubs.append(std.heap.smp_allocator, .{
+                .handler = H,
+                .hub = hub_ptr,
+                .threaded = threaded,
+            }) catch unreachable;
             return self;
         }
 
         pub fn wsInterval(self: *Self, path: []const u8, ms: u64, comptime callback: fn (*Hub) void) *Self {
-            if (self.ws_hub == null) {
-                self.ws_threaded = std.Io.Threaded.init_single_threaded;
-                self.ws_hub = Hub.init(std.heap.smp_allocator, self.ws_threaded.?.io());
-            }
+            var threaded = std.Io.Threaded.init_single_threaded;
+            const hub_ptr = std.heap.smp_allocator.create(Hub) catch unreachable;
+            hub_ptr.* = Hub.init(std.heap.smp_allocator, threaded.io());
             const H = buildWsWrapper(struct {
                 fn handle(w: *Ws) anyerror!void {
                     while (try w.next()) |_| {}
                 }
             }.handle);
             self.router.add(.GET, path, H) catch unreachable;
+            self.ws_route_hubs.append(std.heap.smp_allocator, .{
+                .handler = H,
+                .hub = hub_ptr,
+                .threaded = threaded,
+            }) catch unreachable;
             self.interval_threads.append(std.heap.smp_allocator, .{
-                .hub = &self.ws_hub.?,
+                .hub = hub_ptr,
                 .ms = ms,
                 .callback = callback,
                 .io = undefined,
@@ -729,7 +753,7 @@ pub fn Server(comptime T: type) type {
                 ._db = if (self._db) |*d| @as(*const Database, d) else null,
                 ._driver_type = self._driver_type,
                 .decorations = if (@sizeOf(T) == 0) null else @as(*const anyopaque, @ptrCast(&self.decorations)),
-                .ws_hub = if (self.ws_hub) |*h| h else null,
+                .ws_route_hubs = self.ws_route_hubs.items,
                 .sse_hub = if (self.sse_hub) |*h| h else null,
                 .global_middlewares = self.global_middlewares[0..self.global_middleware_count],
                 .path_middlewares = self.path_middlewares[0..self.path_middleware_count],
