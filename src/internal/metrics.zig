@@ -73,6 +73,10 @@ pub const MetricsSnapshot = struct {
 pub var global_metrics: Metrics = undefined;
 var server_start_time: std.Io.Timestamp = undefined;
 
+pub fn snapshot(_: std.Io) MetricsSnapshot {
+    return global_metrics.get();
+}
+
 pub fn initMetrics(io: std.Io) void {
     global_io = io;
     global_metrics = Metrics.init();

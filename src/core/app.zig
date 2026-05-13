@@ -19,6 +19,7 @@ const Env = @import("../internal/config.zig").Env;
 const default_config = @import("../internal/config.zig").default;
 const views_mod = @import("../render/views.zig");
 const livereload = @import("../modules/livereload.zig");
+const health_mod = @import("../modules/health.zig");
 const Hub = @import("../ws/hub.zig").Hub;
 const Ws = @import("../ws/ws.zig").Ws;
 const Sse = @import("../ws/sse.zig").Sse;
@@ -685,6 +686,10 @@ pub fn Server(comptime T: type) type {
             return self;
         }
 
+        pub fn health(self: *Self, path: []const u8, comptime handler: anytype) *Self {
+            return self.get(path, handler);
+        }
+
         pub fn addRoute(
             self: *Self,
             method: std.http.Method,
@@ -801,9 +806,14 @@ pub fn app(decorations: anytype) AppType(@TypeOf(decorations)) {
     const views_dir = cfg.views_dir orelse "src";
     s.views_index = views_mod.buildIndex(io, std.heap.smp_allocator, views_dir) catch null;
 
+    health_mod.init();
+
     if (cfg.env == .development) {
         _ = s.get("/_spider/reload", livereload.handler);
     }
+
+    _ = s.get("/up", health_mod.up);
+    _ = s.get("/_spider/health", health_mod.health);
 
     return s;
 }
@@ -816,9 +826,14 @@ pub fn appWithConfig(config: Config) Server(EmptyDeco) {
     const views_dir = config.views_dir orelse "src";
     s.views_index = views_mod.buildIndex(io, std.heap.smp_allocator, views_dir) catch null;
 
+    health_mod.init();
+
     if (config.env == .development) {
         _ = s.get("/_spider/reload", livereload.handler);
     }
+
+    _ = s.get("/up", health_mod.up);
+    _ = s.get("/_spider/health", health_mod.health);
 
     return s;
 }
