@@ -19,7 +19,7 @@ pub fn get(key: []const u8) ?[]const u8 {
     const getenv = struct {
         extern fn getenv(name: [*:0]const u8) ?[*:0]const u8;
     }.getenv;
-    const key_z = std.heap.page_allocator.dupeZ(u8, key) catch return null;
+    const key_z = std.heap.page_allocator.dupeSentinel(u8, key, 0) catch return null;
     defer std.heap.page_allocator.free(key_z);
     const val = getenv(key_z.ptr) orelse return null;
     return std.heap.page_allocator.dupe(u8, std.mem.sliceTo(val, 0)) catch null;
@@ -89,9 +89,9 @@ fn loadFile(allocator: std.mem.Allocator, path: []const u8, overwrite: bool) !vo
 
             if (key.len == 0) continue;
 
-            const key_z = try allocator.dupeZ(u8, key);
+            const key_z = try allocator.dupeSentinel(u8, key, 0);
             defer allocator.free(key_z);
-            const value_z = try allocator.dupeZ(u8, value);
+            const value_z = try allocator.dupeSentinel(u8, value, 0);
             defer allocator.free(value_z);
 
             setEnvVarNative(key_z.ptr, value_z.ptr, overwrite);

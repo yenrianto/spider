@@ -268,8 +268,8 @@ fn makeSocketPair() ![2]net.Socket {
     const rc = posix.system.socketpair(posix.AF.UNIX, posix.SOCK.STREAM | posix.SOCK.CLOEXEC, 0, &fds);
     if (rc != 0) return error.Unexpected;
     return .{
-        net.Socket{ .handle = fds[0], .address = .{ .ip4 = .{ .bytes = .{0} ** 4, .port = 0 } } },
-        net.Socket{ .handle = fds[1], .address = .{ .ip4 = .{ .bytes = .{0} ** 4, .port = 0 } } },
+        net.Socket{ .handle = fds[0], .address = .{ .ip4 = .{ .bytes = .{0} * *4, .port = 0 } } },
+        net.Socket{ .handle = fds[1], .address = .{ .ip4 = .{ .bytes = .{0} * *4, .port = 0 } } },
     };
 }
 

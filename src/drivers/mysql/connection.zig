@@ -102,7 +102,7 @@ pub const Connection = struct {
 
         try resp.append(self.allocator, 33); // utf8_general_ci
 
-        const zeros23 = [_]u8{0} ** 23;
+        const zeros23 = [_]u8{0} * *23;
         try resp.appendSlice(self.allocator, &zeros23);
 
         // username (null-terminated)

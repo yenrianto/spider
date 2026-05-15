@@ -1752,19 +1752,19 @@ test "PG: large read" {
 
     {
         // want this to be larger than our read_buffer
-        var rows = try c.query("select $1::text", .{"!" ** 1000});
+        var rows = try c.query("select $1::text", .{"!" * *1000});
         defer rows.deinit();
 
         const row = (try rows.nextUnsafe()).?;
-        try t.expectString("!" ** 1000, row.get([]u8, 0));
+        try t.expectString("!" * *1000, row.get([]u8, 0));
         try t.expectEqual(null, try rows.next());
     }
 
     {
         // with a row
-        var row = (try c.rowUnsafe("select $1::text", .{"z" ** 1000})).?;
+        var row = (try c.rowUnsafe("select $1::text", .{"z" * *1000})).?;
         defer row.deinit() catch {};
-        try t.expectString("z" ** 1000, row.get([]u8, 0));
+        try t.expectString("z" * *1000, row.get([]u8, 0));
     }
 }
 
@@ -1772,11 +1772,11 @@ test "Conn: dynamic buffer freed on error" {
     var c = try t.connect(.{ .read_buffer = 100 });
     defer c.deinit();
 
-    var rows = try c.query("select $1::text", .{"!" ** 200});
+    var rows = try c.query("select $1::text", .{"!" * *200});
     defer rows.deinit();
 
     const row = (try rows.nextUnsafe()).?;
-    try t.expectString("!" ** 200, row.get([]u8, 0));
+    try t.expectString("!" * *200, row.get([]u8, 0));
 
     // we end here, simulating the app returning an error. This causes
     // rows.deinit() and c.deinit() to be called prematurely (from
