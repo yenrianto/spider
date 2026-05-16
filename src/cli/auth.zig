@@ -15,7 +15,7 @@ const keycloak_config =
     \\        .client_secret = spider.env.getOr("KEYCLOAK_CLIENT_SECRET", ""),
     \\        .redirect_uri  = spider.env.getOr("KEYCLOAK_REDIRECT_URI", "http://localhost:3000/auth/callback"),
     \\        .login_path    = "/auth/login",
-    \\        .after_callback_path = "/",
+    \\        .after_callback_path = "/auth/session",
     \\        .auth_skip_paths = &.{ "/auth/login", "/auth/callback", "/auth/logout", "/up" },
 ;
 
@@ -100,6 +100,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, provider: []const u8) !void
         std.debug.print("  KEYCLOAK_CLIENT_ID=spider-app\n", .{});
         std.debug.print("  KEYCLOAK_CLIENT_SECRET=your-client-secret\n", .{});
         std.debug.print("  KEYCLOAK_REDIRECT_URI=http://localhost:3000/auth/callback\n", .{});
+        std.debug.print("  KEYCLOAK_REDIRECT_URI_LOGOUT=http://localhost:3000\n", .{});
     } else {
         std.debug.print("  GOOGLE_CLIENT_ID=your-client-id\n", .{});
         std.debug.print("  GOOGLE_CLIENT_SECRET=your-client-secret\n", .{});

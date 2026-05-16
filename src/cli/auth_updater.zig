@@ -117,6 +117,7 @@ pub fn updateMainZig(
         "        .use({s}_auth.middleware())\n" ++
             "        .get(\"/auth/login\", {s}_auth.loginHandler())\n" ++
             "        .get(\"/auth/callback\", {s}_auth.callbackHandler())\n" ++
+            "        .get(\"/auth/session\", auth.controller.session)\n" ++
             "        .get(\"/auth/logout\", auth.controller.logout)\n",
         .{ provider, provider, provider },
     );
