@@ -1,0 +1,50 @@
+const std = @import("std");
+const spider = @import("spider");
+
+pub fn login(c: *spider.Ctx) !spider.Response {
+    // Handled by {{Provider}}.loginHandler() registered in main.zig
+    return c.redirect("/auth/login");
+}
+
+pub fn callback(c: *spider.Ctx) !spider.Response {
+    // {{Provider}} middleware already validated the JWT and injected:
+    // c.params.get("_user_id")    — subject from token
+    // c.params.get("_user_email") — user email
+    // c.params.get("_user_name")  — user display name
+
+    // TODO: upsert user in database
+    // const user_id = c.params.get("_user_id") orelse return error.Unauthorized;
+    // const email   = c.params.get("_user_email") orelse "";
+    // const name    = c.params.get("_user_name") orelse "";
+    // try c.db().exec(
+    //     "INSERT INTO users (keycloak_id, email, full_name, auth_provider, created_at, updated_at)
+    //      VALUES ($1, $2, $3, 'google', now(), now())
+    //      ON CONFLICT (keycloak_id) DO UPDATE SET email = $2, full_name = $3, updated_at = now()",
+    //     .{ user_id, email, name },
+    // );
+
+    // TODO: emit own HS256 session cookie
+    // var ts: std.os.linux.timespec = undefined;
+    // _ = std.os.linux.clock_gettime(.REALTIME, &ts);
+    // const token = try spider.auth.jwtSign(c.arena, .{
+    //     .sub   = 0,  // replace with local user id from DB
+    //     .email = email,
+    //     .name  = name,
+    //     .exp   = ts.sec + 86400 * 7,
+    // }, spider.env.getOr("JWT_SECRET", ""));
+    // const cookie = try spider.auth.cookieSetSecure(c.arena, token, true);
+    // const headers = try c.arena.alloc([2][]const u8, 2);
+    // headers[0] = .{ "Set-Cookie", cookie };
+    // headers[1] = .{ "Location", "/" };
+    // return spider.Response{ .status = .found, .headers = headers, .body = null, .content_type = "text/plain" };
+
+    return c.redirect("/");
+}
+
+pub fn logout(c: *spider.Ctx) !spider.Response {
+    const cookie = try spider.auth.cookieClear(c.arena);
+    const headers = try c.arena.alloc([2][]const u8, 2);
+    headers[0] = .{ "Set-Cookie", cookie };
+    headers[1] = .{ "Location", "/auth/login" };
+    return spider.Response{ .status = .found, .headers = headers, .body = null, .content_type = "text/plain" };
+}

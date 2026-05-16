@@ -1,0 +1,11 @@
+extends "layout"
+<div class="min-h-screen flex items-center justify-center">
+  <div class="card w-96 shadow-xl">
+    <div class="card-body items-center text-center">
+      <h2 class="card-title text-2xl mb-4">Welcome</h2>
+      <a href="/auth/login" class="btn btn-primary w-full gap-2">
+        Sign in with {{Provider}}
+      </a>
+    </div>
+  </div>
+</div>

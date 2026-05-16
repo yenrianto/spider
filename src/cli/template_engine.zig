@@ -32,3 +32,17 @@ pub fn renderTemplate(allocator: std.mem.Allocator, tmpl: []const u8, feature: [
 
     return try std.mem.replaceOwned(u8, allocator, step2, "{{plural}}", plural);
 }
+
+pub fn renderTemplateWithVars(
+    allocator: std.mem.Allocator,
+    tmpl: []const u8,
+    vars: []const [2][]const u8,
+) ![]u8 {
+    var result = try allocator.dupe(u8, tmpl);
+    for (vars) |pair| {
+        const replaced = try std.mem.replaceOwned(u8, allocator, result, pair[0], pair[1]);
+        allocator.free(result);
+        result = replaced;
+    }
+    return result;
+}

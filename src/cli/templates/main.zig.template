@@ -17,7 +17,7 @@ pub fn main(init: std.process.Init) !void {
     // try db.init(allocator, io, .{});
     // defer db.deinit();
 
-    var server = spider.app();
+    var server = spider.app(.{});
     defer server.deinit();
 
     server

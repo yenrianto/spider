@@ -95,7 +95,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator) !void {
 
     for (files.items) |filename| {
         const version = filename[0 .. filename.len - 4]; // strip .sql
-        const version_z = try allocator.dupeZ(u8, version);
+        const version_z = try allocator.dupe(u8, version);
         defer allocator.free(version_z);
 
         var check = try conn.query(

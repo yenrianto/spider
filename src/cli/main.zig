@@ -13,6 +13,7 @@ const usage =
     \\  spider generate <subcommand>   Generate code (aliases: g)
     \\  spider g <subcommand>          Alias for generate
     \\    feature <name>                Generate a new feature
+    \\    auth [--provider=keycloak|google]  Generate auth feature
     \\  spider migrate                 Run pending database migrations
     \\  spider version                 Show CLI version
     \\  spider help                    Show this help
@@ -54,6 +55,7 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("Usage: spider g <subcommand>\n", .{});
             std.debug.print("Available subcommands:\n", .{});
             std.debug.print("  feature <name>    Generate a new feature\n", .{});
+            std.debug.print("  auth [--provider=keycloak|google]  Generate auth feature\n", .{});
             return;
         };
         try generate.run(io, allocator, subcommand, &args);
