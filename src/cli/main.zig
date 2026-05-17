@@ -9,7 +9,10 @@ const usage =
     \\Spider CLI — spiderme.org
     \\
     \\Usage:
-    \\  spider new <app_name>          Create a new Spider project
+    \\  spider new <app_name> [--daisyui] [--skip-downloads]
+    \\                                 Create a new Spider project
+    \\    --daisyui                    Include DaisyUI preset
+    \\    --skip-downloads             Skip binary downloads (tailwindcss, alpine, htmx, icons)
     \\  spider generate <subcommand>   Generate code (aliases: g)
     \\  spider g <subcommand>          Alias for generate
     \\    feature <name>                Generate a new feature
@@ -34,16 +37,22 @@ pub fn main(init: std.process.Init) !void {
 
     if (std.mem.eql(u8, command, "new")) {
         var use_daisyui = false;
-        var arg = args.next();
-        if (arg != null and std.mem.eql(u8, arg.?, "--daisyui")) {
-            use_daisyui = true;
-            arg = args.next();
+        var skip_downloads = false;
+        var app_name_opt: ?[]const u8 = null;
+        while (args.next()) |arg| {
+            if (std.mem.eql(u8, arg, "--daisyui")) {
+                use_daisyui = true;
+            } else if (std.mem.eql(u8, arg, "--skip-downloads")) {
+                skip_downloads = true;
+            } else {
+                app_name_opt = arg;
+            }
         }
-        const app_name = arg orelse {
+        const app_name = app_name_opt orelse {
             std.debug.print("error: missing app name\nUsage: spider new <app_name>\n", .{});
             return error.MissingAppName;
         };
-        try new.run(io, allocator, app_name, use_daisyui);
+        try new.run(io, allocator, app_name, use_daisyui, skip_downloads);
     } else if (std.mem.eql(u8, command, "generate")) {
         const subcommand = args.next() orelse {
             std.debug.print("Usage: spider generate <subcommand>\n", .{});
