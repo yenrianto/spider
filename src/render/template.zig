@@ -442,13 +442,29 @@ const Parser = struct {
         p.pos += 2;
 
         const expr_start = p.pos;
+        var depth: usize = 0;
         while (p.pos < p.template.len) {
-            if (std.mem.startsWith(u8, p.template[p.pos..], " }")) break;
-            p.pos += 1;
+            if (p.template[p.pos] == '{') {
+                depth += 1;
+                p.pos += 1;
+            } else if (std.mem.startsWith(u8, p.template[p.pos..], " }")) {
+                if (depth == 0) break;
+                depth -= 1;
+                p.pos += 2;
+            } else {
+                p.pos += 1;
+            }
         }
         if (p.pos >= p.template.len) return error.UnclosedInterpolation;
         const expr_raw = p.template[expr_start..p.pos];
         p.pos += 2;
+
+        // If the expression is an if/else block, parse and return it directly.
+        const trimmed_expr = trimWhitespace(expr_raw);
+        if (std.mem.startsWith(u8, trimmed_expr, "if (")) {
+            var sub_pos: usize = 0;
+            return parseIfNode(p.alc, trimmed_expr, &sub_pos);
+        }
 
         if (std.mem.indexOf(u8, expr_raw, " ?? ")) |idx| {
             const expr = trimWhitespace(expr_raw[0..idx]);
@@ -613,6 +629,58 @@ fn parseComponentNode(alc: std.mem.Allocator, template: []const u8, pos: *usize)
     }
 
     return Node{ .component = .{ .name = name, .props = try props.toOwnedSlice(alc), .self_closing = self_closing, .slot_content = slot_content } };
+}
+
+// Parses one complete if/else-if*/else? chain from str[pos.*..].
+// On entry pos.* points at "if (". On return pos.* is past the chain.
+// Handles arbitrary-depth else if chains via recursion.
+fn parseIfNode(alc: std.mem.Allocator, str: []const u8, pos: *usize) !Node {
+    pos.* += 4; // skip "if ("
+
+    const cond_start = pos.*;
+    while (pos.* < str.len and str[pos.*] != ')') pos.* += 1;
+    if (pos.* >= str.len) return error.UnclosedParen;
+    const condition = try alc.dupe(u8, str[cond_start..pos.*]);
+    pos.* += 1; // skip ')'
+
+    while (pos.* < str.len and str[pos.*] == ' ') pos.* += 1;
+    if (pos.* >= str.len or str[pos.*] != '{') return error.ExpectedBrace;
+    pos.* += 1; // skip '{'
+
+    const then_start = pos.*;
+    var brace_count: usize = 1;
+    while (pos.* < str.len and brace_count > 0) {
+        if (str[pos.*] == '{') brace_count += 1 else if (str[pos.*] == '}') brace_count -= 1;
+        if (brace_count > 0) pos.* += 1;
+    }
+    if (pos.* >= str.len) return error.UnclosedBrace;
+    const then_body = try parseTextNodes(alc, trimWhitespace(str[then_start..pos.*]));
+    pos.* += 1; // skip '}'
+
+    var else_body: ?[]Node = null;
+    while (pos.* < str.len and (str[pos.*] == ' ' or str[pos.*] == '\n' or str[pos.*] == '\r')) pos.* += 1;
+
+    if (pos.* + 9 <= str.len and std.mem.eql(u8, str[pos.*..pos.* + 9], "else if (")) {
+        pos.* += 5; // skip "else " to land on "if ("
+        const nested = try parseIfNode(alc, str, pos);
+        var nested_nodes = try alc.alloc(Node, 1);
+        nested_nodes[0] = nested;
+        else_body = nested_nodes;
+    } else if (pos.* + 6 <= str.len and std.mem.eql(u8, str[pos.*..pos.* + 6], "else {")) {
+        pos.* += 6; // skip "else {"
+        const else_start = pos.*;
+        brace_count = 1;
+        while (pos.* < str.len and brace_count > 0) {
+            if (str[pos.*] == '{') brace_count += 1 else if (str[pos.*] == '}') brace_count -= 1;
+            if (brace_count > 0) pos.* += 1;
+        }
+        if (pos.* >= str.len) return error.UnclosedBrace;
+        const else_str = trimWhitespace(str[else_start..pos.*]);
+        pos.* += 1; // skip '}'
+        else_body = try parseTextNodes(alc, else_str);
+    }
+
+    return Node{ .if_node = .{ .condition = condition, .then_body = then_body, .else_body = else_body } };
 }
 
 fn parseTextNodes(alc: std.mem.Allocator, str: []const u8) ![]Node {
@@ -1643,4 +1711,86 @@ test "escaped braces survive extends layout slot re-parsing" {
     try std.testing.expect(std.mem.indexOf(u8, result, "{ message: 'waiting...' }") != null);
     try std.testing.expect(std.mem.indexOf(u8, result, "{ message = e.data }") != null);
     try std.testing.expect(std.mem.indexOf(u8, result, "<p x-html=\"message\">") != null);
+}
+
+test "else if - single chain with final else" {
+    // if + one else if + else: the only supported chaining depth.
+    const alc = std.testing.allocator;
+    const template_str = "if (s == \"a\") { A } else if (s == \"b\") { B } else { C }";
+    var tmpl = try Template.init(alc, template_str);
+    defer tmpl.deinit();
+    const ra = try tmpl.render(.{ .s = "a" }, alc);
+    defer alc.free(ra);
+    try std.testing.expectEqualStrings("A", ra);
+    const rb = try tmpl.render(.{ .s = "b" }, alc);
+    defer alc.free(rb);
+    try std.testing.expectEqualStrings("B", rb);
+    const rc = try tmpl.render(.{ .s = "z" }, alc);
+    defer alc.free(rc);
+    try std.testing.expectEqualStrings("C", rc);
+}
+
+test "else if - multiple branches in for loop (status translation)" {
+    // Desired: each status value renders its clean translation with no leaked text.
+    // Currently FAILS: parseIf handles exactly one else-if; branches beyond the
+    // second are split into separate top-level nodes, causing "else " to leak into
+    // the output and the else fallback to render for every iteration.
+    const alc = std.testing.allocator;
+    const Item = struct { status: []const u8 };
+    const items = &[_]Item{
+        .{ .status = "in_progress" },
+        .{ .status = "open" },
+        .{ .status = "resolved" },
+        .{ .status = "other" },
+    };
+    const template_str =
+        \\for (items) |t| {
+        \\<span>if (t.status == "in_progress") { Em execução } else if (t.status == "open") { Aberto } else if (t.status == "resolved") { Resolvido } else { { t.status } }</span>
+        \\}
+    ;
+    var tmpl = try Template.init(alc, template_str);
+    defer tmpl.deinit();
+    const result = try tmpl.render(.{ .items = items }, alc);
+    defer alc.free(result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "<span>Em execução</span>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "<span>Aberto</span>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "<span>Resolvido</span>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "<span>other</span>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "else") == null);
+}
+
+test "coalescing ?? inside HTML attribute" {
+    const alc = std.testing.allocator;
+    const template_str =
+        \\<a class="tab-{ active ?? "default" }">link</a>
+    ;
+    var tmpl = try Template.init(alc, template_str);
+    defer tmpl.deinit();
+    const r1 = try tmpl.render(.{ .active = "home" }, alc);
+    defer alc.free(r1);
+    try std.testing.expectEqualStrings("<a class=\"tab-home\">link</a>", r1);
+    const r2 = try tmpl.render(.{}, alc);
+    defer alc.free(r2);
+    try std.testing.expectEqualStrings("<a class=\"tab-default\">link</a>", r2);
+}
+
+test "style tag content not processed as template" {
+    // CSS rules contain { } which must not be treated as interpolation.
+    const alc = std.testing.allocator;
+    const template_str =
+        \\<html><body>
+        \\<style>
+        \\.dashboard { padding: 16px; }
+        \\.metric-val { font-size: 28px; font-weight: 500; }
+        \\</style>
+        \\{ greeting }
+        \\</body></html>
+    ;
+    var tmpl = try Template.init(alc, template_str);
+    defer tmpl.deinit();
+    const result = try tmpl.render(.{ .greeting = "Hello" }, alc);
+    defer alc.free(result);
+    try std.testing.expect(std.mem.indexOf(u8, result, ".dashboard { padding: 16px; }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, ".metric-val { font-size: 28px; font-weight: 500; }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "Hello") != null);
 }
