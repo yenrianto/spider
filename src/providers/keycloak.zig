@@ -14,6 +14,7 @@ pub const KeycloakConfig = struct {
     redirect_uri: []const u8 = "http://localhost:3000/auth/callback",
     login_path: []const u8 = "/auth/login",
     after_callback_path: []const u8 = "/",
+    state_prefix: []const u8 = "",
     auth_skip_paths: []const []const u8 = &.{},
 };
 
@@ -121,8 +122,22 @@ pub const Keycloak = struct {
             .max_age = 86400 * 7,
         });
 
+        const location = blk: {
+            const state = c.query("state") orelse break :blk self.config.after_callback_path;
+            // state pode chegar decoded ("invite:") ou percent-encoded ("invite%3A" / "invite%3a")
+            const prefixes = [_][]const u8{ "invite:", "invite%3A", "invite%3a" };
+            const prefix_len: ?usize = for (prefixes) |p| {
+                if (std.mem.startsWith(u8, state, p)) break p.len;
+            } else null;
+            const plen = prefix_len orelse break :blk self.config.after_callback_path;
+            const invite_token = state[plen..];
+            break :blk try std.fmt.allocPrint(c.arena, "{s}?invite={s}", .{ self.config.after_callback_path, invite_token });
+        };
+
+        std.debug.print("[keycloak callback] location={s}\n", .{location});
+
         const hdrs = try c.arena.alloc([2][]const u8, 2);
-        hdrs[0] = .{ "Location", self.config.after_callback_path };
+        hdrs[0] = .{ "Location", location };
         hdrs[1] = .{ "Set-Cookie", cookie_str };
         return Response{
             .status = .found,

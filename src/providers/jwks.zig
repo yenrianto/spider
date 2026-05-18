@@ -170,7 +170,10 @@ pub const JwksAuth = struct {
         else
             full_path;
         for (self.config.auth_skip_paths) |skip| {
-            if (std.mem.eql(u8, path, skip)) return next(c);
+            if (std.mem.eql(u8, path, skip) or
+                (std.mem.startsWith(u8, path, skip) and
+                 (path.len == skip.len or path[skip.len] == '/' or path[skip.len] == '?')))
+                return next(c);
         }
 
         const token = extractToken(c, self.config.cookie_name) orelse
