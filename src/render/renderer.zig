@@ -47,7 +47,7 @@ pub fn renderNode(node: Node, ctx: *Context, alc: std.mem.Allocator, result: *st
             }
         },
         .if_node => |ifn| {
-            const cond = evalBool(ctx, ifn.condition);
+            const cond = evalBool(ctx, ifn.condition, alc);
             if (cond) {
                 for (ifn.then_body) |n| try renderNode(n, ctx, alc, result, components);
             } else if (ifn.else_body) |eb| {
@@ -158,7 +158,7 @@ fn resolveValue(ctx: *const Context, expr: []const u8) ?Value {
     return ctx.get(expr);
 }
 
-fn evalBool(ctx: *Context, expr: []const u8) bool {
+fn evalBool(ctx: *Context, expr: []const u8, alc: std.mem.Allocator) bool {
     if (std.mem.indexOf(u8, expr, " != ")) |idx| {
         const left = trimWhitespace(expr[0..idx]);
         const right_raw = trimWhitespace(expr[idx + 4 ..]);
@@ -166,7 +166,7 @@ fn evalBool(ctx: *Context, expr: []const u8) bool {
             right_raw[1 .. right_raw.len - 1]
         else
             right_raw;
-        return !evalCompare(ctx, left, right);
+        return !evalCompare(ctx, left, right, alc);
     }
     if (std.mem.indexOf(u8, expr, " == ")) |idx| {
         const left = trimWhitespace(expr[0..idx]);
@@ -175,27 +175,27 @@ fn evalBool(ctx: *Context, expr: []const u8) bool {
             right_raw[1 .. right_raw.len - 1]
         else
             right_raw;
-        return evalCompare(ctx, left, right);
+        return evalCompare(ctx, left, right, alc);
     }
     if (std.mem.indexOf(u8, expr, " <= ")) |idx| {
         const left = trimWhitespace(expr[0..idx]);
         const right = trimWhitespace(expr[idx + 4 ..]);
-        return evalNumCompare(ctx, left, right, .lte);
+        return evalNumCompare(ctx, left, right, .lte, alc);
     }
     if (std.mem.indexOf(u8, expr, " >= ")) |idx| {
         const left = trimWhitespace(expr[0..idx]);
         const right = trimWhitespace(expr[idx + 4 ..]);
-        return evalNumCompare(ctx, left, right, .gte);
+        return evalNumCompare(ctx, left, right, .gte, alc);
     }
     if (std.mem.indexOf(u8, expr, " < ")) |idx| {
         const left = trimWhitespace(expr[0..idx]);
         const right = trimWhitespace(expr[idx + 2 ..]);
-        return evalNumCompare(ctx, left, right, .lt);
+        return evalNumCompare(ctx, left, right, .lt, alc);
     }
     if (std.mem.indexOf(u8, expr, " > ")) |idx| {
         const left = trimWhitespace(expr[0..idx]);
         const right = trimWhitespace(expr[idx + 2 ..]);
-        return evalNumCompare(ctx, left, right, .gt);
+        return evalNumCompare(ctx, left, right, .gt, alc);
     }
 
     if (resolveValue(ctx, expr)) |value| {
@@ -205,17 +205,17 @@ fn evalBool(ctx: *Context, expr: []const u8) bool {
     return false;
 }
 
-fn evalCompare(ctx: *Context, left: []const u8, right: []const u8) bool {
-    const resolved = resolveLen(ctx, left) catch return false;
-    defer std.heap.page_allocator.free(resolved);
+fn evalCompare(ctx: *Context, left: []const u8, right: []const u8, alc: std.mem.Allocator) bool {
+    const resolved = resolveLen(ctx, left, alc) catch return false;
+    defer alc.free(resolved);
     return std.mem.eql(u8, resolved, right);
 }
 
 const Cmp = enum { lt, lte, gt, gte };
 
-fn evalNumCompare(ctx: *Context, left: []const u8, right: []const u8, cmp: Cmp) bool {
-    const resolved = resolveLen(ctx, left) catch return false;
-    defer std.heap.page_allocator.free(resolved);
+fn evalNumCompare(ctx: *Context, left: []const u8, right: []const u8, cmp: Cmp, alc: std.mem.Allocator) bool {
+    const resolved = resolveLen(ctx, left, alc) catch return false;
+    defer alc.free(resolved);
     const l = resolved;
 
     const lv = std.fmt.parseInt(i64, l, 10) catch return false;
@@ -229,20 +229,20 @@ fn evalNumCompare(ctx: *Context, left: []const u8, right: []const u8, cmp: Cmp) 
     };
 }
 
-fn resolveLen(ctx: *const Context, expr: []const u8) ![]const u8 {
+fn resolveLen(ctx: *const Context, expr: []const u8, alc: std.mem.Allocator) ![]const u8 {
     if (std.mem.indexOf(u8, expr, ".len")) |dot_idx| {
         const var_name = expr[0..dot_idx];
         if (ctx.get(var_name)) |v| {
             if (v == .list) {
-                return try std.fmt.allocPrint(std.heap.page_allocator, "{d}", .{v.list.len});
+                return try std.fmt.allocPrint(alc, "{d}", .{v.list.len});
             }
         }
-        return try std.heap.page_allocator.dupe(u8, "0");
+        return try alc.dupe(u8, "0");
     }
     if (resolveValue(ctx, expr)) |v| {
-        return try valueToString(v, std.heap.page_allocator);
+        return try valueToString(v, alc);
     }
-    return try std.heap.page_allocator.dupe(u8, "");
+    return try alc.dupe(u8, "");
 }
 
 fn valueToString(value: Value, alc: std.mem.Allocator) ![]const u8 {
