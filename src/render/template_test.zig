@@ -769,3 +769,45 @@ test "else if - full user template with three sections" {
     try std.testing.expect(std.mem.indexOf(u8, r, ">else<") == null);
     try std.testing.expect(std.mem.indexOf(u8, r, "Outro") == null);
 }
+
+test "loop.index - 0-based index available inside for" {
+    const alc = std.testing.allocator;
+    const tmpl_str =
+        \\for (items) |item| { <div>{ loop.index }-{ item }</div> }
+    ;
+    var tmpl = try Template.init(alc, tmpl_str);
+    defer tmpl.deinit();
+    const r = try tmpl.render(.{ .items = [_][]const u8{ "Alpha", "Beta", "Gamma" } }, alc);
+    defer alc.free(r);
+    try std.testing.expect(std.mem.indexOf(u8, r, "<div>0-Alpha</div>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, r, "<div>1-Beta</div>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, r, "<div>2-Gamma</div>") != null);
+}
+
+test "loop.index - correct with struct objects" {
+    const alc = std.testing.allocator;
+    const tmpl_str =
+        \\for (items) |item| { <li>{ loop.index }: { item.name }</li> }
+    ;
+    var tmpl = try Template.init(alc, tmpl_str);
+    defer tmpl.deinit();
+    const Item = struct { name: []const u8 };
+    const r = try tmpl.render(.{ .items = [_]Item{ .{ .name = "Alice" }, .{ .name = "Bob" } } }, alc);
+    defer alc.free(r);
+    try std.testing.expect(std.mem.indexOf(u8, r, "<li>0: Alice</li>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, r, "<li>1: Bob</li>") != null);
+}
+
+test "loop.index - does not leak outside for" {
+    const alc = std.testing.allocator;
+    const tmpl_str =
+        \\for (items) |item| { { item } }
+        \\{ loop.index }
+    ;
+    var tmpl = try Template.init(alc, tmpl_str);
+    defer tmpl.deinit();
+    const r = try tmpl.render(.{ .items = [_][]const u8{ "x" } }, alc);
+    defer alc.free(r);
+    try std.testing.expect(std.mem.indexOf(u8, r, "x") != null);
+    try std.testing.expect(std.mem.indexOf(u8, r, "0") == null);
+}

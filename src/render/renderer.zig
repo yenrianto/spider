@@ -57,7 +57,7 @@ pub fn renderNode(node: Node, ctx: *Context, alc: std.mem.Allocator, result: *st
         .for_node => |fnn| {
             if (ctx.get(fnn.iterable)) |value| {
                 if (value == .list) {
-                    for (value.list) |elem| {
+                    for (value.list, 0..) |elem, idx| {
                         var loop_ctx = Context.init();
                         defer loop_ctx.deinit(alc);
                         switch (elem) {
@@ -72,6 +72,9 @@ pub fn renderNode(node: Node, ctx: *Context, alc: std.mem.Allocator, result: *st
                             },
                             else => {},
                         }
+                        var loop_obj = std.StringHashMapUnmanaged(Value){};
+                        try loop_obj.put(alc, try alc.dupe(u8, "index"), Value{ .string = try std.fmt.allocPrint(alc, "{d}", .{idx}) });
+                        try loop_ctx.set(alc, "loop", Value{ .object = loop_obj });
                         for (fnn.body) |n| try renderNode(n, &loop_ctx, alc, result, components);
                     }
                 }
