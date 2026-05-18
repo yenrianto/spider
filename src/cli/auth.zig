@@ -16,7 +16,7 @@ const keycloak_config =
     \\        .redirect_uri  = spider.env.getOr("KEYCLOAK_REDIRECT_URI", "http://localhost:3000/auth/callback"),
     \\        .login_path    = "/auth/login",
     \\        .after_callback_path = "/auth/session",
-    \\        .auth_skip_paths = &.{ "/auth/login", "/auth/callback", "/auth/logout", "/up" },
+    \\        .auth_skip_paths = &.{ "/auth/login", "/auth/callback", "/auth/logout", "/up", "/invite", "/auth/session" },
 ;
 
 const google_config =

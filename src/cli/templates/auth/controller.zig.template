@@ -2,28 +2,69 @@ const std = @import("std");
 const spider = @import("spider");
 
 pub fn session(c: *spider.Ctx) !spider.Response {
-    const sub = c.params.get("_auth_sub") orelse return error.Unauthorized;
+    const sub   = c.params.get("_auth_sub") orelse return error.Unauthorized;
     const email = c.params.get("_auth_email") orelse "";
-    const name = c.params.get("_auth_name") orelse "";
+    const name  = c.params.get("_auth_name") orelse "";
 
     _ = try spider.pg.query(
         struct {},
         c.arena,
         "INSERT INTO users (keycloak_id, email, full_name, auth_provider, created_at, updated_at) " ++
-            "VALUES ($1, $2, $3, '{{provider}}', now(), now()) " ++
-            "ON CONFLICT (keycloak_id) DO UPDATE SET email = $2, full_name = $3, updated_at = now()",
+        "VALUES ($1, $2, $3, 'keycloak', now(), now()) " ++
+        "ON CONFLICT (keycloak_id) DO UPDATE SET email = $2, full_name = $3, updated_at = now()",
         .{ sub, email, name },
     );
+
+    const invite_token = c.query("invite");
+
+    if (invite_token) |token| {
+        const invites = try spider.pg.query(
+            struct {
+                id:             []const u8,
+                condominium_id: []const u8,
+                role:           []const u8,
+                uses_count:     i32,
+                max_uses:       i32,
+            },
+            c.arena,
+            "SELECT id, condominium_id, role, uses_count, max_uses " ++
+            "FROM invites WHERE token = $1",
+            .{token},
+        );
+
+        if (invites.len > 0) {
+            const invite = invites[0];
+            // max_uses = 0 means unlimited
+            if (invite.max_uses == 0 or invite.uses_count < invite.max_uses) {
+                _ = try spider.pg.query(
+                    struct {},
+                    c.arena,
+                    "INSERT INTO memberships " ++
+                    "(user_id, condominium_id, role, status, approved_at, created_at, updated_at) " ++
+                    "SELECT u.id, $2, $3, 'active', now(), now(), now() " ++
+                    "FROM users u WHERE u.keycloak_id = $1 " ++
+                    "ON CONFLICT (user_id, condominium_id, role) DO NOTHING",
+                    .{ sub, invite.condominium_id, invite.role },
+                );
+                _ = try spider.pg.query(
+                    struct {},
+                    c.arena,
+                    "UPDATE invites SET uses_count = uses_count + 1, updated_at = now() " ++
+                    "WHERE id = $1",
+                    .{invite.id},
+                );
+            }
+        }
+    }
 
     return c.redirect("/");
 }
 
 pub fn logout(c: *spider.Ctx) !spider.Response {
     const cookie = try spider.auth.cookieClear(c.arena);
-
-    const keycloak_logout_url = try std.fmt.allocPrint(
-        c.arena,
-        "{s}/realms/{s}/protocol/openid-connect/logout?post_logout_redirect_uri={s}&client_id={s}",
+    const keycloak_logout_url = try std.fmt.allocPrint(c.arena,
+        "{s}/realms/{s}/protocol/openid-connect/logout" ++
+        "?post_logout_redirect_uri={s}&client_id={s}",
         .{
             spider.env.getOr("KEYCLOAK_BASE_URL", ""),
             spider.env.getOr("KEYCLOAK_REALM", ""),
@@ -31,7 +72,6 @@ pub fn logout(c: *spider.Ctx) !spider.Response {
             spider.env.getOr("KEYCLOAK_CLIENT_ID", ""),
         },
     );
-
     const headers = try c.arena.alloc([2][]const u8, 2);
     headers[0] = .{ "Set-Cookie", cookie };
     headers[1] = .{ "Location", keycloak_logout_url };

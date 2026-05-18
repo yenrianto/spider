@@ -1,0 +1,38 @@
+const std = @import("std");
+const spider = @import("spider");
+
+// GET /invite/:token
+// Validates the invite token and redirects to Keycloak with state=invite:{token}.
+// The token survives the OAuth round-trip and arrives at /auth/session?invite={token}.
+pub fn show(c: *spider.Ctx) !spider.Response {
+    const token = c.params.get("token") orelse return error.NotFound;
+
+    const rows = try spider.pg.query(
+        struct { id: []const u8, uses_count: i32, max_uses: i32 },
+        c.arena,
+        "SELECT id, uses_count, max_uses FROM invites WHERE token = $1",
+        .{token},
+    );
+
+    if (rows.len == 0) return c.text("Invalid invite.", .{ .status = .not_found });
+
+    const invite = rows[0];
+    // max_uses = 0 means unlimited
+    if (invite.max_uses > 0 and invite.uses_count >= invite.max_uses) {
+        return c.text("This invite has reached its usage limit.", .{ .status = .gone });
+    }
+
+    const auth_url = try std.fmt.allocPrint(c.arena,
+        "{s}/realms/{s}/protocol/openid-connect/auth" ++
+        "?client_id={s}&redirect_uri={s}&response_type=code&scope=openid+email+profile&state=invite:{s}",
+        .{
+            spider.env.getOr("KEYCLOAK_BASE_URL", ""),
+            spider.env.getOr("KEYCLOAK_REALM", ""),
+            spider.env.getOr("KEYCLOAK_CLIENT_ID", ""),
+            spider.env.getOr("KEYCLOAK_REDIRECT_URI", "http://localhost:3000/auth/callback"),
+            token,
+        },
+    );
+
+    return c.redirect(auth_url);
+}
