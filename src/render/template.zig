@@ -469,13 +469,25 @@ const Parser = struct {
     fn parseText(p: *Parser) !Node {
         const start = p.pos;
         while (p.pos < p.template.len) {
-            // FIX: Skip <script>...</script> blocks — do not process template syntax inside them
+            // Skip <script>...</script> and <style>...</style> blocks — do not process template syntax inside them
             if (std.mem.startsWith(u8, p.template[p.pos..], "<script")) {
                 while (p.pos < p.template.len and p.template[p.pos] != '>') p.pos += 1;
                 if (p.pos < p.template.len) p.pos += 1;
                 while (p.pos < p.template.len) {
                     if (std.mem.startsWith(u8, p.template[p.pos..], "</script>")) {
                         p.pos += 9;
+                        break;
+                    }
+                    p.pos += 1;
+                }
+                continue;
+            }
+            if (std.mem.startsWith(u8, p.template[p.pos..], "<style")) {
+                while (p.pos < p.template.len and p.template[p.pos] != '>') p.pos += 1;
+                if (p.pos < p.template.len) p.pos += 1;
+                while (p.pos < p.template.len) {
+                    if (std.mem.startsWith(u8, p.template[p.pos..], "</style>")) {
+                        p.pos += 8;
                         break;
                     }
                     p.pos += 1;
