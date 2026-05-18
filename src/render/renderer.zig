@@ -1,0 +1,251 @@
+const std = @import("std");
+const ast = @import("ast.zig");
+const ctx_mod = @import("context.zig");
+const parser_mod = @import("parser.zig");
+
+const Node = ast.Node;
+const freeNode = ast.freeNode;
+const Context = ctx_mod.Context;
+const Value = ctx_mod.Value;
+const dupeValue = ctx_mod.dupeValue;
+const Parser = parser_mod.Parser;
+const trimWhitespace = parser_mod.trimWhitespace;
+
+pub fn renderNode(node: Node, ctx: *Context, alc: std.mem.Allocator, result: *std.ArrayList(u8), components: ?std.StringHashMapUnmanaged([]const u8)) !void {
+    switch (node) {
+        .text => |text| {
+            try result.appendSlice(alc, text);
+        },
+        .interpolation => |expr| {
+            if (std.mem.eql(u8, expr, "slot")) {
+                if (ctx.get("slot")) |value| {
+                    if (value == .string and value.string.len > 0) {
+                        try result.appendSlice(alc, value.string);
+                    }
+                }
+            } else {
+                const value = resolveValue(ctx, expr);
+                if (value) |v| {
+                    const str = try valueToString(v, alc);
+                    try result.appendSlice(alc, str);
+                    alc.free(str);
+                }
+            }
+        },
+        .interpolation_with_default => |iwd| {
+            const value = resolveValue(ctx, iwd.expr);
+            if (value) |v| {
+                const str = try valueToString(v, alc);
+                defer alc.free(str);
+                if (str.len > 0 and !std.mem.eql(u8, str, "false")) {
+                    try result.appendSlice(alc, str);
+                } else {
+                    try result.appendSlice(alc, iwd.default);
+                }
+            } else {
+                try result.appendSlice(alc, iwd.default);
+            }
+        },
+        .if_node => |ifn| {
+            const cond = evalBool(ctx, ifn.condition);
+            if (cond) {
+                for (ifn.then_body) |n| try renderNode(n, ctx, alc, result, components);
+            } else if (ifn.else_body) |eb| {
+                for (eb) |n| try renderNode(n, ctx, alc, result, components);
+            }
+        },
+        .for_node => |fnn| {
+            if (ctx.get(fnn.iterable)) |value| {
+                if (value == .list) {
+                    for (value.list) |elem| {
+                        var loop_ctx = Context.init();
+                        defer loop_ctx.deinit(alc);
+                        switch (elem) {
+                            .string => try loop_ctx.set(alc, fnn.capture, Value{ .string = try alc.dupe(u8, elem.string) }),
+                            .object => {
+                                var obj_copy = std.StringHashMapUnmanaged(Value){};
+                                var iter = elem.object.iterator();
+                                while (iter.next()) |entry| {
+                                    try obj_copy.put(alc, try alc.dupe(u8, entry.key_ptr.*), try dupeValue(alc, entry.value_ptr.*));
+                                }
+                                try loop_ctx.set(alc, fnn.capture, Value{ .object = obj_copy });
+                            },
+                            else => {},
+                        }
+                        for (fnn.body) |n| try renderNode(n, &loop_ctx, alc, result, components);
+                    }
+                }
+            }
+        },
+        .component => |comp| {
+            if (components) |comps| {
+                const template_str = comps.get(comp.name) orelse brk: {
+                    var field_buf: [256]u8 = undefined;
+                    var field_len: usize = 0;
+                    for (comp.name, 0..) |c, i| {
+                        if (c >= 'A' and c <= 'Z') {
+                            if (i > 0) {
+                                field_buf[field_len] = '_';
+                                field_len += 1;
+                            }
+                            field_buf[field_len] = c + 32;
+                        } else {
+                            field_buf[field_len] = c;
+                        }
+                        field_len += 1;
+                    }
+                    break :brk comps.get(field_buf[0..field_len]);
+                };
+                if (template_str) |comp_template_str| {
+                    var comp_parser = Parser.init(alc, comp_template_str);
+                    const comp_nodes = try comp_parser.parse();
+                    defer {
+                        for (comp_nodes.nodes) |n| freeNode(n, alc);
+                        alc.free(comp_nodes.nodes);
+                    }
+
+                    var comp_ctx = try ctx.clone(alc);
+                    defer comp_ctx.deinit(alc);
+
+                    for (comp.props) |prop| {
+                        if (resolveValue(ctx, prop.value)) |val| {
+                            try comp_ctx.set(alc, prop.name, try dupeValue(alc, val));
+                        } else {
+                            try comp_ctx.set(alc, prop.name, Value{ .string = try alc.dupe(u8, prop.value) });
+                        }
+                    }
+
+                    if (comp.slot_content) |sc| {
+                        var slot_parser = Parser.init(alc, sc);
+                        const slot_result = try slot_parser.parse();
+                        defer {
+                            for (slot_result.nodes) |n| freeNode(n, alc);
+                            alc.free(slot_result.nodes);
+                        }
+                        var slot_buf = std.ArrayList(u8).empty;
+                        for (slot_result.nodes) |n| {
+                            try renderNode(n, &comp_ctx, alc, &slot_buf, components);
+                        }
+                        try comp_ctx.set(alc, "slot", Value{ .string = try slot_buf.toOwnedSlice(alc) });
+                    }
+
+                    for (comp_nodes.nodes) |n| {
+                        try renderNode(n, &comp_ctx, alc, result, components);
+                    }
+                }
+            }
+        },
+        .slot => {},
+    }
+}
+
+fn resolveValue(ctx: *const Context, expr: []const u8) ?Value {
+    if (std.mem.indexOfScalar(u8, expr, '.')) |dot_pos| {
+        const first = expr[0..dot_pos];
+        const rest = expr[dot_pos + 1 ..];
+        if (ctx.get(first)) |outer| {
+            if (outer == .object) {
+                if (outer.object.get(rest)) |inner| {
+                    return inner;
+                }
+            }
+        }
+        return null;
+    }
+    return ctx.get(expr);
+}
+
+fn evalBool(ctx: *Context, expr: []const u8) bool {
+    if (std.mem.indexOf(u8, expr, " != ")) |idx| {
+        const left = trimWhitespace(expr[0..idx]);
+        const right_raw = trimWhitespace(expr[idx + 4 ..]);
+        const right = if (right_raw.len >= 2 and right_raw[0] == '"' and right_raw[right_raw.len - 1] == '"')
+            right_raw[1 .. right_raw.len - 1]
+        else
+            right_raw;
+        return !evalCompare(ctx, left, right);
+    }
+    if (std.mem.indexOf(u8, expr, " == ")) |idx| {
+        const left = trimWhitespace(expr[0..idx]);
+        const right_raw = trimWhitespace(expr[idx + 4 ..]);
+        const right = if (right_raw.len >= 2 and right_raw[0] == '"' and right_raw[right_raw.len - 1] == '"')
+            right_raw[1 .. right_raw.len - 1]
+        else
+            right_raw;
+        return evalCompare(ctx, left, right);
+    }
+    if (std.mem.indexOf(u8, expr, " <= ")) |idx| {
+        const left = trimWhitespace(expr[0..idx]);
+        const right = trimWhitespace(expr[idx + 4 ..]);
+        return evalNumCompare(ctx, left, right, .lte);
+    }
+    if (std.mem.indexOf(u8, expr, " >= ")) |idx| {
+        const left = trimWhitespace(expr[0..idx]);
+        const right = trimWhitespace(expr[idx + 4 ..]);
+        return evalNumCompare(ctx, left, right, .gte);
+    }
+    if (std.mem.indexOf(u8, expr, " < ")) |idx| {
+        const left = trimWhitespace(expr[0..idx]);
+        const right = trimWhitespace(expr[idx + 2 ..]);
+        return evalNumCompare(ctx, left, right, .lt);
+    }
+    if (std.mem.indexOf(u8, expr, " > ")) |idx| {
+        const left = trimWhitespace(expr[0..idx]);
+        const right = trimWhitespace(expr[idx + 2 ..]);
+        return evalNumCompare(ctx, left, right, .gt);
+    }
+
+    if (resolveValue(ctx, expr)) |value| {
+        if (value == .boolean) return value.boolean;
+        if (value == .string) return value.string.len > 0 and !std.mem.eql(u8, value.string, "false");
+    }
+    return false;
+}
+
+fn evalCompare(ctx: *Context, left: []const u8, right: []const u8) bool {
+    const resolved = resolveLen(ctx, left) catch return false;
+    defer std.heap.page_allocator.free(resolved);
+    return std.mem.eql(u8, resolved, right);
+}
+
+const Cmp = enum { lt, lte, gt, gte };
+
+fn evalNumCompare(ctx: *Context, left: []const u8, right: []const u8, cmp: Cmp) bool {
+    const resolved = resolveLen(ctx, left) catch return false;
+    defer std.heap.page_allocator.free(resolved);
+    const l = resolved;
+
+    const lv = std.fmt.parseInt(i64, l, 10) catch return false;
+    const rv = std.fmt.parseInt(i64, right, 10) catch return false;
+
+    return switch (cmp) {
+        .lt => lv < rv,
+        .lte => lv <= rv,
+        .gt => lv > rv,
+        .gte => lv >= rv,
+    };
+}
+
+fn resolveLen(ctx: *const Context, expr: []const u8) ![]const u8 {
+    if (std.mem.indexOf(u8, expr, ".len")) |dot_idx| {
+        const var_name = expr[0..dot_idx];
+        if (ctx.get(var_name)) |v| {
+            if (v == .list) {
+                return try std.fmt.allocPrint(std.heap.page_allocator, "{d}", .{v.list.len});
+            }
+        }
+        return try std.heap.page_allocator.dupe(u8, "0");
+    }
+    if (resolveValue(ctx, expr)) |v| {
+        return try valueToString(v, std.heap.page_allocator);
+    }
+    return try std.heap.page_allocator.dupe(u8, "");
+}
+
+fn valueToString(value: Value, alc: std.mem.Allocator) ![]const u8 {
+    switch (value) {
+        .string => |s| return try alc.dupe(u8, s),
+        .boolean => |b| return if (b) try alc.dupe(u8, "true") else try alc.dupe(u8, "false"),
+        else => return try alc.dupe(u8, ""),
+    }
+}
