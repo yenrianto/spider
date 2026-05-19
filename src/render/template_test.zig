@@ -884,3 +884,157 @@ test "loop.index - does not leak outside for" {
     try std.testing.expect(std.mem.indexOf(u8, r, "x") != null);
     try std.testing.expect(std.mem.indexOf(u8, r, "0") == null);
 }
+
+test "logical and operator" {
+    const alc = std.testing.allocator;
+    // both true → renders
+    {
+        var tmpl = try Template.init(alc, "if (a and b) { yes }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .a = true, .b = true }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("yes", r);
+    }
+    // one false → does not render
+    {
+        var tmpl = try Template.init(alc, "if (a and b) { yes }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .a = true, .b = false }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("", r);
+    }
+    // both false → does not render
+    {
+        var tmpl = try Template.init(alc, "if (a and b) { yes }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .a = false, .b = false }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("", r);
+    }
+}
+
+test "logical or operator" {
+    const alc = std.testing.allocator;
+    // both false → does not render
+    {
+        var tmpl = try Template.init(alc, "if (a or b) { yes }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .a = false, .b = false }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("", r);
+    }
+    // one true → renders
+    {
+        var tmpl = try Template.init(alc, "if (a or b) { yes }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .a = false, .b = true }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("yes", r);
+    }
+    // both true → renders
+    {
+        var tmpl = try Template.init(alc, "if (a or b) { yes }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .a = true, .b = true }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("yes", r);
+    }
+}
+
+test "logical and with == comparisons" {
+    const alc = std.testing.allocator;
+    {
+        var tmpl = try Template.init(alc,
+            \\if (a == "x" and b == "y") { yes }
+        );
+        defer tmpl.deinit();
+        const r1 = try tmpl.render(.{ .a = "x", .b = "y" }, alc);
+        defer alc.free(r1);
+        try std.testing.expectEqualStrings("yes", r1);
+        const r2 = try tmpl.render(.{ .a = "x", .b = "z" }, alc);
+        defer alc.free(r2);
+        try std.testing.expectEqualStrings("", r2);
+    }
+}
+
+test "logical or with == comparisons" {
+    const alc = std.testing.allocator;
+    {
+        var tmpl = try Template.init(alc,
+            \\if (a == "x" or b == "y") { yes }
+        );
+        defer tmpl.deinit();
+        const r1 = try tmpl.render(.{ .a = "z", .b = "y" }, alc);
+        defer alc.free(r1);
+        try std.testing.expectEqualStrings("yes", r1);
+        const r2 = try tmpl.render(.{ .a = "z", .b = "z" }, alc);
+        defer alc.free(r2);
+        try std.testing.expectEqualStrings("", r2);
+    }
+}
+
+test "logical and with numeric comparisons" {
+    const alc = std.testing.allocator;
+    var tmpl = try Template.init(alc, "if (count > 0 and count < 10) { yes }");
+    defer tmpl.deinit();
+    const r1 = try tmpl.render(.{ .count = 5 }, alc);
+    defer alc.free(r1);
+    try std.testing.expectEqualStrings("yes", r1);
+    const r2 = try tmpl.render(.{ .count = 0 }, alc);
+    defer alc.free(r2);
+    try std.testing.expectEqualStrings("", r2);
+    const r3 = try tmpl.render(.{ .count = 10 }, alc);
+    defer alc.free(r3);
+    try std.testing.expectEqualStrings("", r3);
+}
+
+test "and/or precedence: and binds tighter than or" {
+    const alc = std.testing.allocator;
+    // a or (b and c): b=false, c=false, a=true → true
+    {
+        var tmpl = try Template.init(alc, "if (a or b and c) { yes }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .a = true, .b = false, .c = false }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("yes", r);
+    }
+    // a or (b and c): a=false, b=true, c=true → true
+    {
+        var tmpl = try Template.init(alc, "if (a or b and c) { yes }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .a = false, .b = true, .c = true }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("yes", r);
+    }
+    // a or (b and c): a=false, b=true, c=false → false
+    {
+        var tmpl = try Template.init(alc, "if (a or b and c) { yes }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .a = false, .b = true, .c = false }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("", r);
+    }
+}
+
+test "and/or no false positives with embedded substrings" {
+    const alc = std.testing.allocator;
+    // "standard" contains "and", "order" contains "or" — must not trigger operators
+    {
+        var tmpl = try Template.init(alc,
+            \\if (status == "standard") { yes }
+        );
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .status = "standard" }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("yes", r);
+    }
+    {
+        var tmpl = try Template.init(alc,
+            \\if (status == "order") { yes }
+        );
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .status = "order" }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("yes", r);
+    }
+}

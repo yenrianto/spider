@@ -159,6 +159,17 @@ fn resolveValue(ctx: *const Context, expr: []const u8) ?Value {
 }
 
 fn evalBool(ctx: *Context, expr: []const u8, alc: std.mem.Allocator) bool {
+    // or binds looser than and — check first so each side may contain "and"
+    if (std.mem.indexOf(u8, expr, " or ")) |idx| {
+        const left = trimWhitespace(expr[0..idx]);
+        const right = trimWhitespace(expr[idx + 4 ..]);
+        return evalBool(ctx, left, alc) or evalBool(ctx, right, alc);
+    }
+    if (std.mem.indexOf(u8, expr, " and ")) |idx| {
+        const left = trimWhitespace(expr[0..idx]);
+        const right = trimWhitespace(expr[idx + 5 ..]);
+        return evalBool(ctx, left, alc) and evalBool(ctx, right, alc);
+    }
     if (std.mem.indexOf(u8, expr, " != ")) |idx| {
         const left = trimWhitespace(expr[0..idx]);
         const right_raw = trimWhitespace(expr[idx + 4 ..]);
