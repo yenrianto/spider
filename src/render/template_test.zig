@@ -470,6 +470,62 @@ test "coalescing ?? inside HTML attribute" {
     try std.testing.expectEqualStrings("<a class=\"tab-default\">link</a>", r2);
 }
 
+test "?? empty default in HTML attribute - no extra whitespace" {
+    const alc = std.testing.allocator;
+    // empty-string default, val is empty string
+    {
+        const tmpl_str =
+            \\<a class="prefix-{ val ?? "" }">link</a>
+        ;
+        var tmpl = try Template.init(alc, tmpl_str);
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .val = "" }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("<a class=\"prefix-\">link</a>", r);
+    }
+    // empty-string default, val absent
+    {
+        const tmpl_str =
+            \\<a class="prefix-{ val ?? "" }">link</a>
+        ;
+        var tmpl = try Template.init(alc, tmpl_str);
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{}, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("<a class=\"prefix-\">link</a>", r);
+    }
+    // "default" as default, val is empty string — must use default, no space
+    {
+        const tmpl_str =
+            \\<a class="prefix-{ val ?? "default" }">link</a>
+        ;
+        var tmpl = try Template.init(alc, tmpl_str);
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .val = "" }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("<a class=\"prefix-default\">link</a>", r);
+    }
+    // same cases inside a for-loop body (uses parseTextNodes path, not parseInterpolation)
+    {
+        const Item = struct { name: []const u8, cls: []const u8 };
+        const items = &[_]Item{
+            .{ .name = "x", .cls = "" },
+            .{ .name = "y", .cls = "active" },
+        };
+        const tmpl_str =
+            \\for (items) |item| { <a class="tab-{ item.cls ?? "" }">{ item.name }</a> }
+        ;
+        var tmpl = try Template.init(alc, tmpl_str);
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .items = items }, alc);
+        defer alc.free(r);
+        // empty cls must produce class="tab-", not "tab- " or "tab- y"
+        try std.testing.expect(std.mem.indexOf(u8, r, "<a class=\"tab-\">x</a>") != null);
+        try std.testing.expect(std.mem.indexOf(u8, r, "<a class=\"tab-active\">y</a>") != null);
+        try std.testing.expect(std.mem.indexOf(u8, r, "tab- ") == null);
+    }
+}
+
 test "style tag content not processed as template" {
     // CSS rules contain { } which must not be treated as interpolation.
     const alc = std.testing.allocator;
@@ -770,6 +826,20 @@ test "else if - full user template with three sections" {
     try std.testing.expect(std.mem.indexOf(u8, r, "Outro") == null);
 }
 
+// test "loop.index - 0-based index available inside for" {
+//     const alc = std.testing.allocator;
+//     const tmpl_str =
+//         \\for (items) |item| { <div>{ loop.index }-{ item }</div> }
+//     ;
+//     var tmpl = try Template.init(alc, tmpl_str);
+//     defer tmpl.deinit();
+//     const r = try tmpl.render(.{ .items = [_][]const u8{ "Alpha", "Beta", "Gamma" } }, alc);
+//     defer alc.free(r);
+//     try std.testing.expect(std.mem.indexOf(u8, r, "<div>0-Alpha</div>") != null);
+//     try std.testing.expect(std.mem.indexOf(u8, r, "<div>1-Beta</div>") != null);
+//     try std.testing.expect(std.mem.indexOf(u8, r, "<div>2-Gamma</div>") != null);
+// }
+
 test "loop.index - 0-based index available inside for" {
     const alc = std.testing.allocator;
     const tmpl_str =
@@ -777,11 +847,14 @@ test "loop.index - 0-based index available inside for" {
     ;
     var tmpl = try Template.init(alc, tmpl_str);
     defer tmpl.deinit();
+
     const r = try tmpl.render(.{ .items = [_][]const u8{ "Alpha", "Beta", "Gamma" } }, alc);
     defer alc.free(r);
-    try std.testing.expect(std.mem.indexOf(u8, r, "<div>0-Alpha</div>") != null);
-    try std.testing.expect(std.mem.indexOf(u8, r, "<div>1-Beta</div>") != null);
-    try std.testing.expect(std.mem.indexOf(u8, r, "<div>2-Gamma</div>") != null);
+
+    try std.testing.expectEqualStrings(
+        "<div>0-Alpha</div><div>1-Beta</div><div>2-Gamma</div>",
+        r,
+    );
 }
 
 test "loop.index - correct with struct objects" {
@@ -806,7 +879,7 @@ test "loop.index - does not leak outside for" {
     ;
     var tmpl = try Template.init(alc, tmpl_str);
     defer tmpl.deinit();
-    const r = try tmpl.render(.{ .items = [_][]const u8{ "x" } }, alc);
+    const r = try tmpl.render(.{ .items = [_][]const u8{"x"} }, alc);
     defer alc.free(r);
     try std.testing.expect(std.mem.indexOf(u8, r, "x") != null);
     try std.testing.expect(std.mem.indexOf(u8, r, "0") == null);
