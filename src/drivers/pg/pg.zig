@@ -209,6 +209,14 @@ fn mapRow(comptime T: type, result: *pg_lib.Result, row: pg_lib.Row, arena: std.
     return item;
 }
 
+fn logPgErr(conn: *pg_lib.Conn) void {
+    if (conn.err) |e| {
+        std.log.err("[pg] {s} (code={s})", .{ e.message, e.code });
+        if (e.detail) |d| std.log.err("[pg] detail: {s}", .{d});
+        if (e.constraint) |c| std.log.err("[pg] constraint: {s}", .{c});
+    }
+}
+
 fn execTyped(
     conn: *pg_lib.Conn,
     comptime T: type,
@@ -217,11 +225,17 @@ fn execTyped(
     params: anytype,
 ) !QueryResult(T) {
     if (T == void) {
-        _ = try conn.exec(sql, params);
+        conn.exec(sql, params) catch |err| {
+            if (err == error.PG) logPgErr(conn);
+            return err;
+        };
         return {};
     }
 
-    var result = try conn.queryOpts(sql, params, .{ .column_names = true });
+    var result = conn.queryOpts(sql, params, .{ .column_names = true }) catch |err| {
+        if (err == error.PG) logPgErr(conn);
+        return err;
+    };
     defer result.deinit();
 
     if (T == i32) {
