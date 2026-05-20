@@ -139,6 +139,9 @@ fn generateFieldName(path: []const u8, buffer: []u8) ![]const u8 {
         if (std.mem.eql(u8, dir, file)) {
             return try std.fmt.bufPrint(buffer, "{s}", .{file});
         }
+        if (file.len > 0 and file[0] >= 'A' and file[0] <= 'Z') {
+            return try std.fmt.bufPrint(buffer, "{s}", .{file});
+        }
         return try std.fmt.bufPrint(buffer, "{s}_{s}", .{ dir, file });
     } else if (std.mem.indexOf(u8, no_ext, "templates/")) |idx| {
         const after = no_ext[idx + "templates/".len ..];
