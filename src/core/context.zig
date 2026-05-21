@@ -89,7 +89,7 @@ pub const Ctx = struct {
         return Response{
             .status = opts.status,
             .body = content,
-            .content_type = "text/plain",
+            .content_type = "text/plain; charset=utf-8",
             .headers = opts.headers,
             .cookies = opts.cookies,
         };
