@@ -53,8 +53,16 @@ pub const Ws = struct {
         self._hub.broadcast(text);
     }
 
+    pub fn broadcastFmt(self: *Ws, comptime fmt: []const u8, args: anytype) void {
+        self._hub.broadcastFmt(fmt, args);
+    }
+
     pub fn broadcastTo(self: *Ws, channel: []const u8, text: []const u8) void {
         self._hub.broadcastToChannel(channel, text);
+    }
+
+    pub fn broadcastToFmt(self: *Ws, channel: []const u8, comptime fmt: []const u8, args: anytype) void {
+        self._hub.broadcastToChannelFmt(channel, fmt, args);
     }
 
     pub fn param(self: *Ws, key: []const u8) ?[]const u8 {

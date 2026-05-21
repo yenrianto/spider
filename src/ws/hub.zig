@@ -186,6 +186,18 @@ pub const Hub = struct {
         }
     }
 
+    pub fn broadcastFmt(self: *Hub, comptime fmt: []const u8, args: anytype) void {
+        const msg = std.fmt.allocPrint(self.allocator, fmt, args) catch return;
+        defer self.allocator.free(msg);
+        self.broadcast(msg);
+    }
+
+    pub fn broadcastToChannelFmt(self: *Hub, channel: []const u8, comptime fmt: []const u8, args: anytype) void {
+        const msg = std.fmt.allocPrint(self.allocator, fmt, args) catch return;
+        defer self.allocator.free(msg);
+        self.broadcastToChannel(channel, msg);
+    }
+
     pub fn broadcastToChannel(self: *Hub, channel: []const u8, message: []const u8) void {
         self.mutex.lock(self.io) catch return;
         var snapshot: std.ArrayListUnmanaged(Connection) = .empty;
