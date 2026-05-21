@@ -21,6 +21,7 @@ pub const JwksConfig = struct {
     login_path: []const u8 = "/login",
     after_callback_path: []const u8 = "/",
     auth_skip_paths: []const []const u8 = &.{},
+    refresh_path: ?[]const u8 = null,
 };
 
 pub const Claims = struct {
@@ -194,8 +195,13 @@ pub const JwksAuth = struct {
             std.Io.Clock.now(.real, c._io).nanoseconds,
             1_000_000_000,
         ));
-        if (claims.exp < now_sec)
+        if (claims.exp < now_sec) {
+            if (self.config.refresh_path) |rpath| {
+                const refresh_url = try std.fmt.allocPrint(c.arena, "{s}?next={s}", .{ rpath, path });
+                return redirect(c, refresh_url);
+            }
             return c.text("Token expired", .{ .status = .unauthorized });
+        }
         if (claims.nbf) |nbf| {
             if (nbf > now_sec)
                 return c.text("Token not yet valid", .{ .status = .unauthorized });
