@@ -32,6 +32,7 @@ pub const static = @import("modules/static.zig");
 pub const dashboard = @import("modules/dashboard.zig");
 pub const livereload = @import("modules/livereload.zig");
 pub const health = @import("modules/health.zig");
+pub const r2 = @import("modules/r2.zig");
 pub const logger = @import("modules/logger.zig").middleware;
 pub const metrics = @import("internal/metrics.zig");
 pub const env = @import("internal/env.zig");

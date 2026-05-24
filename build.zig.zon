@@ -5,8 +5,8 @@
     .minimum_zig_version = "0.17.0-dev.93+76174e1bc",
     .dependencies = .{
         .pacman = .{
-            .url = "git+https://github.com/llllOllOOll/pacman#fa4cfdbc2429fbf39bb569ae307ccc6ca6024f3a",
-            .hash = "pacman-0.1.0-SPnstaF-AAAkk0-mLHhUVku-ICUINnnSxQ-dDvifsC_S",
+            .url = "git+https://github.com/llllOllOOll/pacman#d150221ec7980f74d90ba7b17faea0cc733e891d",
+            .hash = "pacman-0.1.0-SPnstbOVAAD--xa2EH3HBKetiiD2i-TRZlgeXldb9M74",
         },
         .pg = .{
             .path = "pg_driver_impl",

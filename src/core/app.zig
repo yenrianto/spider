@@ -638,6 +638,30 @@ pub fn Server(comptime T: type) type {
             return self;
         }
 
+        pub fn put(self: *Self, path: []const u8, handler: anytype) *Self {
+            const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
+            self.router.add(.PUT, path, H) catch unreachable;
+            return self;
+        }
+
+        pub fn delete(self: *Self, path: []const u8, handler: anytype) *Self {
+            const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
+            self.router.add(.DELETE, path, H) catch unreachable;
+            return self;
+        }
+
+        pub fn patch(self: *Self, path: []const u8, handler: anytype) *Self {
+            const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
+            self.router.add(.PATCH, path, H) catch unreachable;
+            return self;
+        }
+
+        pub fn head(self: *Self, path: []const u8, handler: anytype) *Self {
+            const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
+            self.router.add(.HEAD, path, H) catch unreachable;
+            return self;
+        }
+
         pub fn ws(self: *Self, path: []const u8, comptime handler: fn (*Ws) anyerror!void) *Self {
             var threaded = std.Io.Threaded.init_single_threaded;
             const hub_ptr = std.heap.smp_allocator.create(Hub) catch unreachable;
