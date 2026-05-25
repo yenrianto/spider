@@ -65,7 +65,8 @@ pub const R2 = struct {
         defer res.deinit();
 
         if (res.status != .ok and res.status != .no_content) {
-            std.log.err("r2 put failed with status={d} method=PUT url={s}", .{ @intFromEnum(res.status), path });
+            const res_body = res.text();
+            std.log.err("r2 put failed status={d} url={s} body={s}", .{ @intFromEnum(res.status), path, res_body });
             return error.R2PutFailed;
         }
     }

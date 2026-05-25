@@ -272,8 +272,23 @@ pub const Ctx = struct {
         return parsed.value;
     }
 
+    pub fn parseMultipart(self: *Ctx) !@import("../binding/multipart.zig").MultipartData {
+        const body = self.body orelse return error.BodyEmpty;
+        const ct = self.header("content-type") orelse return error.MissingContentType;
+        const boundary = (@import("../binding/multipart.zig").extractBoundary(ct)) orelse return error.InvalidBoundary;
+        return @import("../binding/multipart.zig").parse(self.arena, body, boundary);
+    }
+
     pub fn parseForm(self: *Ctx, comptime T: type) !T {
         const body = self.body orelse return error.BodyEmpty;
+        const ct = self.header("content-type");
+        if (ct) |content_type| {
+            if (@import("../binding/multipart.zig").extractBoundary(content_type)) |boundary| {
+                var mp = try @import("../binding/multipart.zig").parse(self.arena, body, boundary);
+                defer mp.deinit();
+                return try @import("../binding/form_parser.zig").FormParser.fromMultipartData(&mp, self.arena, T);
+            }
+        }
         var parser = try @import("../binding/form_parser.zig").FormParser.init(self.arena, body);
         defer parser.deinit();
         return try parser.parse(T);
