@@ -2,6 +2,7 @@ const std = @import("std");
 const new = @import("new.zig");
 const generate = @import("generate.zig");
 const migrate = @import("migrate.zig");
+const generate_vapid = @import("generate_vapid.zig");
 
 const version = "0.6.2";
 
@@ -17,6 +18,7 @@ const usage =
     \\  spider g <subcommand>          Alias for generate
     \\    feature <name>                Generate a new feature
     \\    auth [--provider=keycloak|google]  Generate auth feature
+    \\  spider generate-vapid           Generate VAPID keys for Web Push
     \\  spider migrate                 Run pending database migrations
     \\  spider version                 Show CLI version
     \\  spider help                    Show this help
@@ -70,6 +72,9 @@ pub fn main(init: std.process.Init) !void {
         try generate.run(io, allocator, subcommand, &args);
     } else if (std.mem.eql(u8, command, "migrate")) {
         try migrate.run(io, allocator);
+    } else if (std.mem.eql(u8, command, "generate-vapid")) {
+        const subject = args.next();
+        try generate_vapid.run(io, allocator, subject);
     } else if (std.mem.eql(u8, command, "version")) {
         std.debug.print("spider v{s}\n", .{version});
     } else if (std.mem.eql(u8, command, "help")) {
