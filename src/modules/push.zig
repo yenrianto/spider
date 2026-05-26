@@ -65,7 +65,7 @@ pub const WebPush = struct {
         const encrypted = try encryptPayload(c.arena, c._io, subscription, payload);
         const audience = try extractOrigin(c.arena, subscription.endpoint);
         const jwt = try buildVapidJwt(c.arena, c._io, self.config, audience);
-        const pub_key_b64 = try base64urlEncode(c.arena, self.config.public_key);
+        const pub_key_b64 = self.config.public_key;
 
         var res = try pacman.post(c._io, c.arena, subscription.endpoint, .{
             .body = .{ .raw = encrypted },
