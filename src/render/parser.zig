@@ -349,13 +349,13 @@ pub fn parseIfNode(alc: std.mem.Allocator, str: []const u8, pos: *usize) ParseEr
     var else_body: ?[]Node = null;
     while (pos.* < str.len and (str[pos.*] == ' ' or str[pos.*] == '\t' or str[pos.*] == '\n' or str[pos.*] == '\r')) pos.* += 1;
 
-    if (pos.* + 9 <= str.len and std.mem.eql(u8, str[pos.*..pos.* + 9], "else if (")) {
+    if (pos.* + 9 <= str.len and std.mem.eql(u8, str[pos.* .. pos.* + 9], "else if (")) {
         pos.* += 5; // skip "else " to land on "if ("
         const nested = try parseIfNode(alc, str, pos);
         var nested_nodes = try alc.alloc(Node, 1);
         nested_nodes[0] = nested;
         else_body = nested_nodes;
-    } else if (pos.* + 6 <= str.len and std.mem.eql(u8, str[pos.*..pos.* + 6], "else {")) {
+    } else if (pos.* + 6 <= str.len and std.mem.eql(u8, str[pos.* .. pos.* + 6], "else {")) {
         pos.* += 6; // skip "else {"
         const else_start = pos.*;
         brace_count = 1;

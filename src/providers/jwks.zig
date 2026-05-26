@@ -173,7 +173,7 @@ pub const JwksAuth = struct {
         for (self.config.auth_skip_paths) |skip| {
             if (std.mem.eql(u8, path, skip) or
                 (std.mem.startsWith(u8, path, skip) and
-                 (path.len == skip.len or path[skip.len] == '/' or path[skip.len] == '?')))
+                    (path.len == skip.len or path[skip.len] == '/' or path[skip.len] == '?')))
                 return next(c);
         }
 

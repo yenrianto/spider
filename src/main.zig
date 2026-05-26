@@ -193,24 +193,24 @@ pub fn main(init: std.process.Init) void {
     defer spider.pg.deinit();
 
     var keycloak_auth = try spider.keycloak.Keycloak.init(allocator, io, .{
-        .base_url      = spider.env.getOr("KEYCLOAK_BASE_URL", ""),
-        .realm         = spider.env.getOr("KEYCLOAK_REALM", ""),
-        .client_id     = spider.env.getOr("KEYCLOAK_CLIENT_ID", ""),
+        .base_url = spider.env.getOr("KEYCLOAK_BASE_URL", ""),
+        .realm = spider.env.getOr("KEYCLOAK_REALM", ""),
+        .client_id = spider.env.getOr("KEYCLOAK_CLIENT_ID", ""),
         .client_secret = spider.env.getOr("KEYCLOAK_CLIENT_SECRET", ""),
-        .redirect_uri  = spider.env.getOr("KEYCLOAK_REDIRECT_URI", "http://localhost:3000/auth/callback"),
-        .login_path    = "/auth/login",
+        .redirect_uri = spider.env.getOr("KEYCLOAK_REDIRECT_URI", "http://localhost:3000/auth/callback"),
+        .login_path = "/auth/login",
         .after_callback_path = "/",
         .auth_skip_paths = &.{ "/auth/login", "/auth/callback", "/auth/logout", "/up" },
     });
     defer keycloak_auth.deinit();
 
     var keycloak_auth = try spider.keycloak.Keycloak.init(allocator, io, .{
-        .base_url      = spider.env.getOr("KEYCLOAK_BASE_URL", ""),
-        .realm         = spider.env.getOr("KEYCLOAK_REALM", ""),
-        .client_id     = spider.env.getOr("KEYCLOAK_CLIENT_ID", ""),
+        .base_url = spider.env.getOr("KEYCLOAK_BASE_URL", ""),
+        .realm = spider.env.getOr("KEYCLOAK_REALM", ""),
+        .client_id = spider.env.getOr("KEYCLOAK_CLIENT_ID", ""),
         .client_secret = spider.env.getOr("KEYCLOAK_CLIENT_SECRET", ""),
-        .redirect_uri  = spider.env.getOr("KEYCLOAK_REDIRECT_URI", "http://localhost:3000/auth/callback"),
-        .login_path    = "/auth/login",
+        .redirect_uri = spider.env.getOr("KEYCLOAK_REDIRECT_URI", "http://localhost:3000/auth/callback"),
+        .login_path = "/auth/login",
         .after_callback_path = "/",
         .auth_skip_paths = &.{ "/auth/login", "/auth/callback", "/auth/logout", "/up" },
     });

@@ -121,9 +121,15 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     errdefer std.debug.print("error: failed at step '{s}' — {s}\n", .{ current_step, @errorName(fail_err) });
 
     current_step = "zig init";
-    runZigInit(io, app_name) catch |err| { fail_err = err; return err; };
+    runZigInit(io, app_name) catch |err| {
+        fail_err = err;
+        return err;
+    };
 
-    var project_dir = cwd.openDir(io, app_name, .{}) catch |err| { fail_err = err; return err; };
+    var project_dir = cwd.openDir(io, app_name, .{}) catch |err| {
+        fail_err = err;
+        return err;
+    };
     defer project_dir.close(io);
 
     project_dir.createDirPath(io, "bin") catch {};
@@ -133,30 +139,60 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
 
     if (!skip_downloads) {
         current_step = "download tailwindcss";
-        downloader.download(io, allocator, getTailwindUrl(), project_dir, "bin/tailwindcss") catch |err| { fail_err = err; return err; };
+        downloader.download(io, allocator, getTailwindUrl(), project_dir, "bin/tailwindcss") catch |err| {
+            fail_err = err;
+            return err;
+        };
 
         current_step = "download daisyui";
-        downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.mjs", project_dir, "bin/daisyui.mjs") catch |err| { fail_err = err; return err; };
-        downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.mjs", project_dir, "bin/daisyui-theme.mjs") catch |err| { fail_err = err; return err; };
+        downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.mjs", project_dir, "bin/daisyui.mjs") catch |err| {
+            fail_err = err;
+            return err;
+        };
+        downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.mjs", project_dir, "bin/daisyui-theme.mjs") catch |err| {
+            fail_err = err;
+            return err;
+        };
 
         current_step = "download alpine";
-        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/alpinejs@latest/dist/cdn.min.js", project_dir, "public/js/alpine.min.js") catch |err| { fail_err = err; return err; };
+        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/alpinejs@latest/dist/cdn.min.js", project_dir, "public/js/alpine.min.js") catch |err| {
+            fail_err = err;
+            return err;
+        };
 
         current_step = "download htmx";
-        downloader.download(io, allocator, "https://unpkg.com/htmx.org@latest/dist/htmx.min.js", project_dir, "public/js/htmx.min.js") catch |err| { fail_err = err; return err; };
+        downloader.download(io, allocator, "https://unpkg.com/htmx.org@latest/dist/htmx.min.js", project_dir, "public/js/htmx.min.js") catch |err| {
+            fail_err = err;
+            return err;
+        };
 
         current_step = "download icons";
-        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css", project_dir, "public/css/tabler-icons.min.css") catch |err| { fail_err = err; return err; };
-        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/fonts/tabler-icons.woff2", project_dir, "public/fonts/tabler-icons.woff2") catch |err| { fail_err = err; return err; };
+        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css", project_dir, "public/css/tabler-icons.min.css") catch |err| {
+            fail_err = err;
+            return err;
+        };
+        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/fonts/tabler-icons.woff2", project_dir, "public/fonts/tabler-icons.woff2") catch |err| {
+            fail_err = err;
+            return err;
+        };
 
         current_step = "chmod tailwindcss";
-        const tailwind_path = std.fmt.allocPrint(allocator, "{s}/bin/tailwindcss", .{app_name}) catch |err| { fail_err = err; return err; };
+        const tailwind_path = std.fmt.allocPrint(allocator, "{s}/bin/tailwindcss", .{app_name}) catch |err| {
+            fail_err = err;
+            return err;
+        };
         defer allocator.free(tailwind_path);
-        chmod.makeExecutable(io, tailwind_path) catch |err| { fail_err = err; return err; };
+        chmod.makeExecutable(io, tailwind_path) catch |err| {
+            fail_err = err;
+            return err;
+        };
     }
 
     current_step = "read fingerprint";
-    const fingerprint = readFingerprint(io, allocator, project_dir) catch |err| { fail_err = err; return err; };
+    const fingerprint = readFingerprint(io, allocator, project_dir) catch |err| {
+        fail_err = err;
+        return err;
+    };
     defer allocator.free(fingerprint);
 
     std.debug.print("Creating {s}...\n", .{app_name});
@@ -197,16 +233,25 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     inline for (files) |f| {
         const path = f[0];
         const tmpl = f[1];
-        const content = render(allocator, tmpl, app_name, fingerprint) catch |err| { fail_err = err; return err; };
+        const content = render(allocator, tmpl, app_name, fingerprint) catch |err| {
+            fail_err = err;
+            return err;
+        };
         defer allocator.free(content);
-        writeFile(io, project_dir, path, content) catch |err| { fail_err = err; return err; };
+        writeFile(io, project_dir, path, content) catch |err| {
+            fail_err = err;
+            return err;
+        };
         std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
     }
 
     inline for (static_assets) |f| {
         const path = f[0];
         const content = f[1];
-        writeFile(io, project_dir, path, content) catch |err| { fail_err = err; return err; };
+        writeFile(io, project_dir, path, content) catch |err| {
+            fail_err = err;
+            return err;
+        };
         std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
     }
 
@@ -215,18 +260,33 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
         var css_child = std.process.spawn(io, .{
             .argv = &.{ "./bin/tailwindcss", "-i", "src/styles.css", "-o", "public/css/app.css" },
             .cwd = .{ .path = app_name },
-        }) catch |err| { fail_err = err; return err; };
-        const css_term = css_child.wait(io) catch |err| { fail_err = err; return err; };
+        }) catch |err| {
+            fail_err = err;
+            return err;
+        };
+        const css_term = css_child.wait(io) catch |err| {
+            fail_err = err;
+            return err;
+        };
         switch (css_term) {
-            .exited => |code| if (code != 0) { fail_err = error.TailwindCompileFailed; return error.TailwindCompileFailed; },
-            else => { fail_err = error.TailwindCompileFailed; return error.TailwindCompileFailed; },
+            .exited => |code| if (code != 0) {
+                fail_err = error.TailwindCompileFailed;
+                return error.TailwindCompileFailed;
+            },
+            else => {
+                fail_err = error.TailwindCompileFailed;
+                return error.TailwindCompileFailed;
+            },
         }
         std.debug.print("  CSS compiled → public/css/app.css\n", .{});
     }
 
     current_step = "fetch spider";
     std.debug.print("Fetching spider from main...\n", .{});
-    runZigFetch(io, app_name) catch |err| { fail_err = err; return err; };
+    runZigFetch(io, app_name) catch |err| {
+        fail_err = err;
+        return err;
+    };
 
     std.debug.print("\nDone! Next steps:\n", .{});
     std.debug.print("  cd {s}\n", .{app_name});
