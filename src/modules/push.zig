@@ -80,7 +80,11 @@ pub const WebPush = struct {
 
         if (res.status != .ok and res.status != .no_content and res.status != .created) {
             std.log.err("push send failed status={d} endpoint={s}", .{ @intFromEnum(res.status), subscription.endpoint });
-            return error.PushSendFailed;
+            return switch (res.status) {
+                .gone        => error.PushSubscriptionExpired, // 410 — subscription permanently invalid
+                .forbidden   => error.PushForbidden,           // 403 — VAPID key mismatch or wrong origin
+                else         => error.PushSendFailed,
+            };
         }
     }
 };
