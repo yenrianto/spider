@@ -197,6 +197,9 @@ pub const JwksAuth = struct {
         ));
         if (claims.exp < now_sec) {
             if (self.config.refresh_path) |rpath| {
+                // HTMX requests must receive 401 — a 302 would be followed as GET,
+                // losing the original method and body. The client JS handles the redirect.
+                if (c.isHtmx()) return c.text("Token expired", .{ .status = .unauthorized });
                 const refresh_url = try std.fmt.allocPrint(c.arena, "{s}?next={s}", .{ rpath, path });
                 return redirect(c, refresh_url);
             }
