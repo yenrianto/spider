@@ -55,6 +55,39 @@ pub const WebPush = struct {
         };
     }
 
+    pub fn sendRaw(
+        self: *const WebPush,
+        arena: std.mem.Allocator,
+        io: std.Io,
+        subscription: PushSubscription,
+        payload: []const u8,
+        ttl: u32,
+    ) !void {
+        const encrypted = try encryptPayload(arena, io, subscription, payload);
+        const audience = try extractOrigin(arena, subscription.endpoint);
+        const jwt = try buildVapidJwt(arena, io, self.config, audience);
+        const pub_key_b64 = self.config.public_key;
+
+        var res = try pacman.post(io, arena, subscription.endpoint, .{
+            .body = .{ .raw = encrypted },
+            .headers = &.{
+                .{ .name = "Authorization", .value = try std.fmt.allocPrint(arena, "vapid t={s},k={s}", .{ jwt, pub_key_b64 }) },
+                .{ .name = "Content-Encoding", .value = "aes128gcm" },
+                .{ .name = "Content-Type", .value = "application/octet-stream" },
+                .{ .name = "TTL", .value = try std.fmt.allocPrint(arena, "{d}", .{ttl}) },
+            },
+        });
+        defer res.deinit();
+
+        if (res.status != .ok and res.status != .no_content and res.status != .created) {
+            return switch (res.status) {
+                .gone => error.PushSubscriptionExpired,
+                .forbidden => error.PushForbidden,
+                else => error.PushSendFailed,
+            };
+        }
+    }
+
     pub fn send(
         self: *const WebPush,
         c: *Ctx,
@@ -81,9 +114,9 @@ pub const WebPush = struct {
         if (res.status != .ok and res.status != .no_content and res.status != .created) {
             std.log.err("push send failed status={d} endpoint={s}", .{ @intFromEnum(res.status), subscription.endpoint });
             return switch (res.status) {
-                .gone        => error.PushSubscriptionExpired, // 410 — subscription permanently invalid
-                .forbidden   => error.PushForbidden,           // 403 — VAPID key mismatch or wrong origin
-                else         => error.PushSendFailed,
+                .gone => error.PushSubscriptionExpired, // 410 — subscription permanently invalid
+                .forbidden => error.PushForbidden, // 403 — VAPID key mismatch or wrong origin
+                else => error.PushSendFailed,
             };
         }
     }
