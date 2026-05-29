@@ -60,6 +60,7 @@ pub const R2 = struct {
                 .{ .name = "X-Amz-Date", .value = signed.x_amz_date },
                 .{ .name = "X-Amz-Content-Sha256", .value = signed.x_amz_content_sha256 },
                 .{ .name = "Content-Type", .value = content_type },
+                .{ .name = "Connection", .value = "close" },
             },
         });
         defer res.deinit();
@@ -119,6 +120,7 @@ pub const R2 = struct {
                 .{ .name = "Authorization", .value = signed.authorization },
                 .{ .name = "X-Amz-Date", .value = signed.x_amz_date },
                 .{ .name = "X-Amz-Content-Sha256", .value = signed.x_amz_content_sha256 },
+                .{ .name = "Connection", .value = "close" },
             },
         });
         defer res.deinit();
