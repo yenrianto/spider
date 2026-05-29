@@ -1038,3 +1038,33 @@ test "and/or no false positives with embedded substrings" {
         try std.testing.expectEqualStrings("yes", r);
     }
 }
+
+test "list index access [0] in interpolation" {
+    const alc = std.testing.allocator;
+    const Item = struct { name: []const u8, value: i64 };
+    const items = &[_]Item{
+        .{ .name = "first", .value = 42 },
+        .{ .name = "second", .value = 99 },
+    };
+    {
+        var tmpl = try Template.init(alc, "{ items[0].name }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .items = items }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("first", r);
+    }
+    {
+        var tmpl = try Template.init(alc, "{ items[1].name }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .items = items }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("second", r);
+    }
+    {
+        var tmpl = try Template.init(alc, "{ items[0].value }");
+        defer tmpl.deinit();
+        const r = try tmpl.render(.{ .items = items }, alc);
+        defer alc.free(r);
+        try std.testing.expectEqualStrings("42", r);
+    }
+}

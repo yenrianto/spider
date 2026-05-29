@@ -146,10 +146,43 @@ fn resolveValue(ctx: *const Context, expr: []const u8) ?Value {
     if (std.mem.indexOfScalar(u8, expr, '.')) |dot_pos| {
         const first = expr[0..dot_pos];
         const rest = expr[dot_pos + 1 ..];
+        if (std.mem.indexOfScalar(u8, first, '[')) |bracket_pos| {
+            const list_name = first[0..bracket_pos];
+            const close = std.mem.indexOfScalar(u8, first, ']') orelse return null;
+            const index_str = first[bracket_pos + 1 .. close];
+            const index = std.fmt.parseInt(usize, index_str, 10) catch return null;
+            if (ctx.get(list_name)) |outer| {
+                if (outer == .list) {
+                    if (index < outer.list.len) {
+                        const elem = outer.list[index];
+                        if (rest.len == 0) return elem;
+                        if (elem == .object) {
+                            return elem.object.get(rest);
+                        }
+                    }
+                }
+            }
+            return null;
+        }
         if (ctx.get(first)) |outer| {
             if (outer == .object) {
                 if (outer.object.get(rest)) |inner| {
                     return inner;
+                }
+            }
+        }
+        return null;
+    }
+    // Handle list[ index ] without trailing field access
+    if (std.mem.indexOfScalar(u8, expr, '[')) |bracket_pos| {
+        const list_name = expr[0..bracket_pos];
+        const close = std.mem.indexOfScalar(u8, expr, ']') orelse return null;
+        const index_str = expr[bracket_pos + 1 .. close];
+        const index = std.fmt.parseInt(usize, index_str, 10) catch return null;
+        if (ctx.get(list_name)) |outer| {
+            if (outer == .list) {
+                if (index < outer.list.len) {
+                    return outer.list[index];
                 }
             }
         }
