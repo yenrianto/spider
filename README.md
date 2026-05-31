@@ -1,14 +1,12 @@
 # <img src="assets/spider_logo.png" width="32" height="32" alt="Spider Logo"> Spider v0.6.2
 
-Build web servers in Zig — with the ergonomics you'd expect
-from Django or Rails, and the performance you'd expect from C.
+Build web servers in Zig — performant, productive, and batteries-included.
 
 **Batteries included:** PostgreSQL, SQLite, MySQL, JWT auth, Google OAuth,
 Clerk, Keycloak, WebSockets, SSE, Web Push, Cloudflare R2, multipart upload,
 HTMX support, CLI tool, and a powerful template engine.
 
 📖 **Documentation:** this README  
-🚀 **Starter Kit:** [SpiderStack](examples/spiderstack/)  
 🔧 **CLI:** `spider new myapp`
 
 ---
@@ -540,6 +538,9 @@ Rules: strip extension → use segment after `views/` or `templates/` → replac
 ### PostgreSQL (Pure Zig)
 
 Spider's PostgreSQL driver is **pure Zig** — no libpq dependency required. It uses a connection pool with retry logic (5 attempts, exponential backoff) and supports parameterized queries (`$1`, `$2`, ...).
+
+> Obrigado ao [karlseguin](https://github.com/karlseguin) pelo excelente [pg.zig](https://github.com/karlseguin/pg.zig) — projeto que serviu de base para o driver PostgreSQL do Spider. Utilizamos um fork customizado para atender às necessidades do framework.
+
 
 ```zig
 const std = @import("std");
@@ -1534,7 +1535,7 @@ pub const CookieOptions = struct {
 
 ## Examples
 
-- 🚀 **[SpiderStack](examples/spiderstack/)** — Full-featured starter kit with Google OAuth, PostgreSQL, HTMX, Tailwind, and DaisyUI
+- 🚀 **[SpiderStack](examples/spiderstack/)** — ~~Full-featured starter kit with Google OAuth, PostgreSQL, HTMX, Tailwind, and DaisyUI~~ **Desatualizado — não recomendado no momento**
 - 📦 **[local_first](examples/local_first/)** — Local-first architecture example
 - 🏗️ **[embed_templates](examples/embed_templates/)** — Template embed mode example
 - 🔧 **[c_import_zig_017](examples/c_import_zig_017/)** — C imports with Zig 0.17
