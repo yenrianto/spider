@@ -84,7 +84,7 @@ const spider = @import("spider");
 pub const spider_templates = @import("embedded_templates.zig").EmbeddedTemplates;
 
 pub fn main() void {
-    var server = spider.server();
+    var server = spider.app(.{});
     defer server.deinit();
 
     server
@@ -554,7 +554,7 @@ pub fn main() !void {
     try db.init(io, .{});
     defer db.deinit();
 
-    var server = spider.server();
+    var server = spider.app(.{});
     defer server.deinit();
 
     server
