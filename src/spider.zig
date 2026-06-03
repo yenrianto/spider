@@ -38,6 +38,7 @@ pub const logger = @import("modules/logger.zig").middleware;
 pub const metrics = @import("internal/metrics.zig");
 pub const env = @import("internal/env.zig");
 pub const template = @import("render/template.zig");
+pub const ast = @import("render/ast.zig");
 pub const zmd = @import("render/zmd/zmd.zig");
 pub const form = @import("binding/form.zig");
 pub const form_parser = @import("binding/form_parser.zig");

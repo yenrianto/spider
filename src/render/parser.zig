@@ -89,7 +89,13 @@ pub const Parser = struct {
         p.pos += 5;
 
         const iter_start = p.pos;
-        while (p.pos < p.template.len and p.template[p.pos] != ')') p.pos += 1;
+        var paren_depth: usize = 0;
+        while (p.pos < p.template.len) {
+            if (p.template[p.pos] == '(') paren_depth += 1;
+            if (p.template[p.pos] == ')' and paren_depth == 0) break;
+            if (p.template[p.pos] == ')') paren_depth -= 1;
+            p.pos += 1;
+        }
         if (p.pos >= p.template.len) return error.UnclosedParen;
         const iterable = try p.alc.dupe(u8, p.template[iter_start..p.pos]);
         p.pos += 1;
@@ -327,7 +333,13 @@ pub fn parseIfNode(alc: std.mem.Allocator, str: []const u8, pos: *usize) ParseEr
     pos.* += 4; // skip "if ("
 
     const cond_start = pos.*;
-    while (pos.* < str.len and str[pos.*] != ')') pos.* += 1;
+    var paren_depth: usize = 0;
+    while (pos.* < str.len) {
+        if (str[pos.*] == '(') paren_depth += 1;
+        if (str[pos.*] == ')' and paren_depth == 0) break;
+        if (str[pos.*] == ')') paren_depth -= 1;
+        pos.* += 1;
+    }
     if (pos.* >= str.len) return error.UnclosedParen;
     const condition = try alc.dupe(u8, str[cond_start..pos.*]);
     pos.* += 1; // skip ')'
@@ -437,7 +449,13 @@ pub fn parseTextNodes(alc: std.mem.Allocator, str: []const u8) ![]Node {
         } else if (std.mem.startsWith(u8, remaining, "for (")) {
             pos += 5;
             const iter_start = pos;
-            while (pos < str.len and str[pos] != ')') pos += 1;
+            var paren_depth: usize = 0;
+            while (pos < str.len) {
+                if (str[pos] == '(') paren_depth += 1;
+                if (str[pos] == ')' and paren_depth == 0) break;
+                if (str[pos] == ')') paren_depth -= 1;
+                pos += 1;
+            }
             if (pos >= str.len) return error.UnclosedParen;
             const iterable = try alc.dupe(u8, str[iter_start..pos]);
             pos += 1;

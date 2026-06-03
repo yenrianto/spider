@@ -91,6 +91,24 @@ pub fn structToContext(alc: std.mem.Allocator, data: anytype) !Context {
                     }
                 }
             }
+        } else if (field_info == .optional) {
+            if (value) |unwrapped| {
+                const inner_info = @typeInfo(@TypeOf(unwrapped));
+                if (inner_info == .pointer) {
+                    const ptr = inner_info.pointer;
+                    if (ptr.child == u8 and ptr.size == .slice) {
+                        try ctx.set(alc, field.name, Value{ .string = try alc.dupe(u8, unwrapped) });
+                    }
+                } else if (inner_info == .bool) {
+                    try ctx.set(alc, field.name, Value{ .boolean = unwrapped });
+                } else if (inner_info == .int or inner_info == .comptime_int) {
+                    const str = try std.fmt.allocPrint(alc, "{d}", .{unwrapped});
+                    try ctx.set(alc, field.name, Value{ .string = str });
+                } else if (inner_info == .float or inner_info == .comptime_float) {
+                    const str = try std.fmt.allocPrint(alc, "{d}", .{unwrapped});
+                    try ctx.set(alc, field.name, Value{ .string = str });
+                }
+            }
         } else if (field_info == .bool) {
             try ctx.set(alc, field.name, Value{ .boolean = value });
         } else if (field_info == .int or field_info == .comptime_int) {
@@ -195,6 +213,24 @@ pub fn structToObject(alc: std.mem.Allocator, data: anytype) !std.StringHashMapU
                     if (elem_ptr.child == u8 and elem_ptr.size == .slice) {
                         try obj.put(alc, try alc.dupe(u8, field.name), Value{ .list = try stringSliceToValueList(alc, value) });
                     }
+                }
+            }
+        } else if (field_info == .optional) {
+            if (value) |unwrapped| {
+                const inner_info = @typeInfo(@TypeOf(unwrapped));
+                if (inner_info == .pointer) {
+                    const ptr = inner_info.pointer;
+                    if (ptr.child == u8 and ptr.size == .slice) {
+                        try obj.put(alc, try alc.dupe(u8, field.name), Value{ .string = try alc.dupe(u8, unwrapped) });
+                    }
+                } else if (inner_info == .bool) {
+                    try obj.put(alc, try alc.dupe(u8, field.name), Value{ .boolean = unwrapped });
+                } else if (inner_info == .int or inner_info == .comptime_int) {
+                    const str = try std.fmt.allocPrint(alc, "{d}", .{unwrapped});
+                    try obj.put(alc, try alc.dupe(u8, field.name), Value{ .string = str });
+                } else if (inner_info == .float or inner_info == .comptime_float) {
+                    const str = try std.fmt.allocPrint(alc, "{d}", .{unwrapped});
+                    try obj.put(alc, try alc.dupe(u8, field.name), Value{ .string = str });
                 }
             }
         } else if (field_info == .bool) {

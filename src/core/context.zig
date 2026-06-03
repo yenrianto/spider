@@ -159,6 +159,8 @@ pub const Ctx = struct {
                 };
             }
 
+            self._last_template = name;
+
             var components = std.StringHashMapUnmanaged([]const u8){};
             defer {
                 var iter = components.iterator();
@@ -173,6 +175,10 @@ pub const Ctx = struct {
             inline for (std.meta.fields(Templates)) |field| {
                 const content: []const u8 = @field(embed_inst, field.name);
                 try components.put(self.arena, try self.arena.dupe(u8, field.name), try self.arena.dupe(u8, content));
+                if (comptime std.mem.startsWith(u8, field.name, "components_")) {
+                    const alias = field.name["components_".len..];
+                    try components.put(self.arena, try self.arena.dupe(u8, alias), try self.arena.dupe(u8, content));
+                }
             }
 
             var tmpl_instance = try Template.init(self.arena, view_content);
@@ -243,6 +249,10 @@ pub const Ctx = struct {
                     .limited(512 * 1024),
                 ) catch continue;
                 try components.put(self.arena, try self.arena.dupe(u8, entry.name), content);
+                if (std.mem.startsWith(u8, entry.name, "components_")) {
+                    const alias = entry.name["components_".len..];
+                    try components.put(self.arena, try self.arena.dupe(u8, alias), try self.arena.dupe(u8, content));
+                }
             }
         }
 
