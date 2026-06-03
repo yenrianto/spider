@@ -225,7 +225,7 @@ fn execTyped(
     params: anytype,
 ) !QueryResult(T) {
     if (T == void) {
-        conn.exec(sql, params) catch |err| {
+        _ = conn.exec(sql, params) catch |err| {
             if (err == error.PG) logPgErr(conn);
             return err;
         };
@@ -264,12 +264,18 @@ fn execTypedOne(
 
     const row = (try result.next()) orelse return null;
 
-    if (T == i32) {
+    const out: ?T = if (T == i32) blk: {
         const v = row.values[0];
-        if (v.is_null) return null;
-        return @intCast(readIntBinary(v.data, row.oids[0]));
-    }
-    return try mapRow(T, result, row, arena);
+        if (v.is_null) break :blk null;
+        break :blk @intCast(readIntBinary(v.data, row.oids[0]));
+    } else try mapRow(T, result, row, arena);
+
+    // Drain remaining CommandComplete + ReadyForQuery messages so conn._state
+    // is restored to .idle/.transaction before the connection is reused.
+    // Without this, transactions fail with ConnectionBusy on the next operation.
+    while (try result.next()) |_| {}
+
+    return out;
 }
 
 pub fn query(
