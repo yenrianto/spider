@@ -236,6 +236,66 @@ pub const R2 = struct {
         });
     }
 
+    pub fn presignedGet(self: *const R2, allocator: std.mem.Allocator, key: []const u8, expires_sec: u32) ![]const u8 {
+        const dt = currentDateTime();
+        const date_str = dt.date[0..];
+        const datetime_str = dt.datetime[0..];
+
+        const host = try self.endpointHost(allocator);
+        const path = try self.requestPath(allocator, key);
+
+        const credential = try std.fmt.allocPrint(allocator, "{s}/{s}/{s}/s3/aws4_request", .{
+            self.config.access_key, date_str, self.config.region,
+        });
+
+        var cred_encoded = std.ArrayList(u8).empty;
+        defer cred_encoded.deinit(allocator);
+        for (credential) |c| {
+            if (c == '/') {
+                try cred_encoded.appendSlice(allocator, "%2F");
+            } else {
+                try cred_encoded.append(allocator, c);
+            }
+        }
+
+        const expires_str = try std.fmt.allocPrint(allocator, "{d}", .{expires_sec});
+
+        const query = try std.fmt.allocPrint(
+            allocator,
+            "X-Amz-Algorithm=AWS4-HMAC-SHA256" ++
+                "&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD" ++
+                "&X-Amz-Credential={s}" ++
+                "&X-Amz-Date={s}" ++
+                "&X-Amz-Expires={s}" ++
+                "&X-Amz-SignedHeaders=host",
+            .{ cred_encoded.items, datetime_str, expires_str },
+        );
+
+        const canonical_headers = try std.fmt.allocPrint(allocator, "host:{s}\n", .{host});
+
+        const canonical_request = try std.fmt.allocPrint(
+            allocator,
+            "GET\n{s}\n{s}\n{s}\nhost\nUNSIGNED-PAYLOAD",
+            .{ path, query, canonical_headers },
+        );
+
+        const canonical_hash = try sha256Hex(allocator, canonical_request);
+        const string_to_sign = try std.fmt.allocPrint(
+            allocator,
+            "AWS4-HMAC-SHA256\n{s}\n{s}/{s}/s3/aws4_request\n{s}",
+            .{ datetime_str, date_str, self.config.region, canonical_hash },
+        );
+
+        const signing_key = try signingKey(self.config.secret_key, date_str, self.config.region, "s3");
+        var sig_bytes: [HmacSha256.mac_length]u8 = undefined;
+        HmacSha256.create(&sig_bytes, string_to_sign, &signing_key);
+        const sig_hex = try hexLower(allocator, &sig_bytes);
+
+        return std.fmt.allocPrint(allocator, "https://{s}{s}?{s}&X-Amz-Signature={s}", .{
+            host, path, query, sig_hex,
+        });
+    }
+
     // ─── Utilities ───────────────────────────────────────────────
 
     pub fn publicUrl(self: *const R2, allocator: std.mem.Allocator, key: []const u8) ![]const u8 {
