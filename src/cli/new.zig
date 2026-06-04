@@ -27,6 +27,9 @@ const favicon_png = @embedFile("assets/favicon.png");
 const favicon_ico = @embedFile("assets/favicon.ico");
 const layout_daisyui_html_tmpl = @embedFile("templates/layout_daisyui.html.template");
 const home_daisyui_index_tmpl = @embedFile("templates/home_daisyui_index.html.template");
+const build_zig_pg_tmpl = @embedFile("templates/build.zig.pg.template");
+const main_zig_pg_tmpl = @embedFile("templates/main.zig.pg.template");
+const migrations_zig_tmpl = @embedFile("templates/migrations.zig.template");
 
 fn getTailwindUrl() []const u8 {
     const os = @import("builtin").os.tag;
@@ -98,7 +101,11 @@ fn writeFile(io: std.Io, dir: std.Io.Dir, path: []const u8, content: []const u8)
     try writer.interface.flush();
 }
 
-pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_daisyui: bool, skip_downloads: bool) !void {
+pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_daisyui: bool, skip_downloads: bool, api_only: bool, no_db: bool) !void {
+    // --api implies no database and no asset downloads
+    const effective_no_db = no_db or api_only;
+    const effective_skip = skip_downloads or api_only;
+
     const cwd = std.Io.Dir.cwd();
 
     cwd.createDir(io, app_name, .default_dir) catch |err| {
@@ -137,8 +144,9 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     project_dir.createDirPath(io, "public/css") catch {};
     project_dir.createDirPath(io, "public/fonts") catch {};
 
-    if (!skip_downloads) {
-        current_step = "download tailwindcss";
+    if (!effective_skip) {
+        if (!api_only) {
+            current_step = "download tailwindcss";
         downloader.download(io, allocator, getTailwindUrl(), project_dir, "bin/tailwindcss") catch |err| {
             fail_err = err;
             return err;
@@ -186,6 +194,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
             fail_err = err;
             return err;
         };
+        }
     }
 
     current_step = "read fingerprint";
@@ -199,12 +208,14 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
 
     const selected_layout_tmpl = if (use_daisyui) layout_daisyui_html_tmpl else layout_html_tmpl;
     const selected_home_index_tmpl = if (use_daisyui) home_daisyui_index_tmpl else home_index_tmpl;
+    const selected_build_zig_tmpl = if (effective_no_db) build_zig_tmpl else build_zig_pg_tmpl;
+    const selected_main_zig_tmpl = if (effective_no_db) main_zig_tmpl else main_zig_pg_tmpl;
 
     const files = .{
-        .{ "build.zig", build_zig_tmpl },
+        .{ "build.zig", selected_build_zig_tmpl },
         .{ "build.zig.zon", build_zon_tmpl },
         .{ "spider.config.zig", spider_config_tmpl },
-        .{ "src/main.zig", main_zig_tmpl },
+        .{ "src/main.zig", selected_main_zig_tmpl },
         .{ "src/styles.css", styles_css_tmpl },
         .{ "src/embedded_templates.zig", "// Generated file - DO NOT EDIT MANUALLY\npub const EmbeddedTemplates = struct {};\n" },
         .{ "src/core/mod.zig", core_mod_tmpl },
@@ -255,7 +266,20 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
         std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
     }
 
-    if (!skip_downloads) {
+    if (!effective_no_db) {
+        const migrations_content = render(allocator, migrations_zig_tmpl, app_name, fingerprint) catch |err| {
+            fail_err = err;
+            return err;
+        };
+        defer allocator.free(migrations_content);
+        writeFile(io, project_dir, "src/core/db/migrations.zig", migrations_content) catch |err| {
+            fail_err = err;
+            return err;
+        };
+        std.debug.print("  create  {s}/src/core/db/migrations.zig\n", .{app_name});
+    }
+
+    if (!effective_skip) {
         current_step = "compile css";
         var css_child = std.process.spawn(io, .{
             .argv = &.{ "./bin/tailwindcss", "-i", "src/styles.css", "-o", "public/css/app.css" },
@@ -292,7 +316,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     std.debug.print("  cd {s}\n", .{app_name});
     std.debug.print("  zig build run\n", .{});
 
-    if (skip_downloads) {
+    if (effective_skip) {
         std.debug.print("\nwarning: downloads skipped, run `spider fetch-deps` to download missing binaries.\n", .{});
     }
 }
