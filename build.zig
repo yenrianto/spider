@@ -3,6 +3,7 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const with_pg = b.option(bool, "pg", "Enable PostgreSQL support") orelse false;
 
     const pacman_dep = b.dependency("pacman", .{});
     const pg_dep = b.dependency("pg", .{ .target = target, .optimize = optimize });
@@ -17,6 +18,16 @@ pub fn build(b: *std.Build) void {
             .{ .name = "pg", .module = pg_dep.module("pg") },
         },
     });
+
+    if (with_pg) {
+        const pg_module_dep = b.lazyDependency("spider_pg", .{
+            .target = target,
+            .optimize = optimize,
+        }) orelse unreachable;
+        const spider_pg = pg_module_dep.module("spider_pg");
+        spider_pg.addImport("spider", mod);
+        mod.addImport("spider_pg", spider_pg);
+    }
 
     // Default spider_config fallback for projects without spider.config.zig
     const default_cfg = b.addWriteFiles();

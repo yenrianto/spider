@@ -11,6 +11,10 @@
         .pg = .{
             .path = "modules/pg/pg_driver_impl",
         },
+        .spider_pg = .{
+            .path = "modules/pg",
+            .lazy = true,
+        },
     },
     .paths = .{
         "build.zig",

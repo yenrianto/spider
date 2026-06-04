@@ -29,7 +29,7 @@ pub const DatabaseCtx = struct {
     pub fn query(self: DatabaseCtx, comptime T: type, sql: []const u8, params: anytype) ![]T {
         return switch (self._driver_type) {
             .postgresql => {
-                const pg = @import("../drivers/pg/pg.zig");
+                const pg = @import("spider_pg");
                 return pg.query(T, self._arena, sql, params);
             },
             .mysql => {
