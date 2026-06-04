@@ -16,7 +16,7 @@ pub fn build{{Feature}}ListContext(
     alloc: std.mem.Allocator,
     {{plural}}: []const model.{{Feature}},
 ) !{{Feature}}ListContext {
-    var rows = try std.ArrayList({{Feature}}Row).initCapacity(alloc, {{plural}}.len);
+    var rows = try std.ArrayListUnmanaged({{Feature}}Row).initCapacity(alloc, {{plural}}.len);
     for ({{plural}}) |item| {
         try rows.append(alloc, {{Feature}}Row{ .id = item.id, .name = item.name });
     }

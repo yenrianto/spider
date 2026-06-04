@@ -28,7 +28,7 @@ pub fn download(io: std.Io, allocator: std.mem.Allocator, url: []const u8, dir: 
     var decompress_buf: [std.compress.flate.max_window_len]u8 = undefined;
     const reader = response.readerDecompressing(&transfer_buf, &decompress, &decompress_buf);
 
-    var body = std.ArrayList(u8).initCapacity(allocator, 4096) catch unreachable;
+    var body = std.ArrayListUnmanaged(u8).initCapacity(allocator, 4096) catch unreachable;
     defer body.deinit(allocator);
 
     while (true) {
