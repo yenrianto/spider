@@ -1,4 +1,4 @@
-name: release
+name: Release Spider CLI
 
 on:
   push:
@@ -6,11 +6,73 @@ on:
       - 'v*'
 
 jobs:
-  release:
+  build:
+    name: Build for ${{ matrix.platform }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: linux-x86_64
+            target: x86_64-linux
+            binary: spider
+          - platform: macos-x86_64
+            target: x86_64-macos
+            binary: spider
+          - platform: macos-aarch64
+            target: aarch64-macos
+            binary: spider
+          - platform: windows-x86_64
+            target: x86_64-windows
+            binary: spider.exe
+
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0-dev.93+76174e1bc
+
+      - name: Build Spider CLI
+        run: zig build -Doptimize=ReleaseSafe -Dtarget=${{ matrix.target }}
+
+      - name: Create tarball
+        run: |
+          cd zig-out/bin
+          tar -czf spider-${{ matrix.platform }}.tar.gz ${{ matrix.binary }}
+          mv spider-${{ matrix.platform }}.tar.gz $GITHUB_WORKSPACE/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spider-${{ matrix.platform }}.tar.gz
+          path: spider-${{ matrix.platform }}.tar.gz
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          files: |
+            spider-linux-x86_64.tar.gz
+            spider-macos-x86_64.tar.gz
+            spider-macos-aarch64.tar.gz
+            spider-windows-x86_64.tar.gz
           generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
