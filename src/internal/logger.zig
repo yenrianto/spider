@@ -85,10 +85,10 @@ pub const Logger = struct {
             std.debug.print("{{}}", .{});
         } else {
             std.debug.print(".", .{});
-            const fields = std.meta.fields(T);
+            const fields = std.meta.fieldNames(T);
             var first = true;
-            inline for (fields) |field| {
-                const value = @field(data, field.name);
+            inline for (fields) |fname| {
+                const value = @field(data, fname);
                 const comma = if (first) "" else ",";
                 first = false;
                 const V = @TypeOf(value);

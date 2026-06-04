@@ -152,11 +152,12 @@ fn mapRowToStruct(
 ) !T {
     var item: T = undefined;
 
-    inline for (@typeInfo(T).@"struct".fields) |field| {
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types) |fname, ftype| {
         // Find matching field by name
         var field_index: ?usize = null;
         for (fields, 0..) |f, i| {
-            if (std.mem.eql(u8, f.name, field.name)) {
+            if (std.mem.eql(u8, f.name, fname)) {
                 field_index = i;
                 break;
             }
@@ -165,7 +166,7 @@ fn mapRowToStruct(
         if (field_index) |idx| {
             const raw_value = if (idx < row.values.items.len) row.values.items[idx] else "";
 
-            @field(item, field.name) = try types.decodeText(field.type, raw_value, arena);
+            @field(item, fname) = try types.decodeText(ftype, raw_value, arena);
         } else {
             // Field not found, use default value
             @field(item, field.name) = switch (field.type) {

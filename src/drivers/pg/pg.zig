@@ -188,22 +188,23 @@ fn decodeField(comptime T: type, data: []const u8, oid: i32, arena: std.mem.Allo
 
 fn mapRow(comptime T: type, result: *pg_lib.Result, row: pg_lib.Row, arena: std.mem.Allocator) !T {
     var item: T = undefined;
-    inline for (@typeInfo(T).@"struct".fields) |field| {
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types) |field_name, field_type| {
         var col_idx: ?usize = null;
         for (result.column_names, 0..) |name, i| {
-            if (std.mem.eql(u8, name, field.name)) {
+            if (std.mem.eql(u8, name, field_name)) {
                 col_idx = i;
                 break;
             }
         }
         if (col_idx) |ci| {
             const value = row.values[ci];
-            @field(item, field.name) = if (value.is_null)
-                nullValue(field.type)
+            @field(item, field_name) = if (value.is_null)
+                nullValue(field_type)
             else
-                try decodeField(field.type, value.data, row.oids[ci], arena);
+                try decodeField(field_type, value.data, row.oids[ci], arena);
         } else {
-            @field(item, field.name) = nullValue(field.type);
+            @field(item, field_name) = nullValue(field_type);
         }
     }
     return item;
@@ -594,16 +595,17 @@ pub const Result = struct {
 
 fn mapResultRow(comptime T: type, result: *const Result, row: usize, alloc: std.mem.Allocator) !T {
     var item: T = undefined;
-    inline for (@typeInfo(T).@"struct".fields) |field| {
+    const info2 = @typeInfo(T).@"struct";
+    inline for (info2.field_names, info2.field_types) |field_name, field_type| {
         var col_idx: ?usize = null;
         for (0..result._col_count) |i| {
-            if (std.mem.eql(u8, result._col_names[i], field.name)) {
+            if (std.mem.eql(u8, result._col_names[i], field_name)) {
                 col_idx = i;
                 break;
             }
         }
         const raw = if (col_idx) |ci| result.getValue(row, ci) else "";
-        @field(item, field.name) = try parseField(field.type, raw, alloc);
+        @field(item, field_name) = try parseField(field_type, raw, alloc);
     }
     return item;
 }

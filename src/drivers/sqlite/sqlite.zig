@@ -87,10 +87,10 @@ pub fn query(
     defer _ = c.sqlite3_finalize(stmt);
 
     // Bind parameters (se houver)
-    const param_count = comptime @typeInfo(@TypeOf(params)).@"struct".fields.len;
+    const param_count = comptime @typeInfo(@TypeOf(params)).@"struct".field_names.len;
     if (param_count > 0) {
         inline for (0..param_count) |i| {
-            const value = @field(params, @typeInfo(@TypeOf(params)).@"struct".fields[i].name);
+            const value = @field(params, @typeInfo(@TypeOf(params)).@"struct".field_names[i]);
             const bind_result = bindParam(stmt.?, @intCast(i + 1), value);
             if (bind_result != c.SQLITE_OK) {
                 std.log.err("sqlite: failed to bind parameter {d}", .{i + 1});
@@ -152,32 +152,33 @@ fn mapRow(comptime T: type, stmt: *c.sqlite3_stmt, arena: std.mem.Allocator) !T 
     var item: T = undefined;
     const num_cols = c.sqlite3_column_count(stmt);
 
-    inline for (@typeInfo(T).@"struct".fields, 0..) |field, i| {
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types, 0..) |fname, ftype, i| {
         if (i >= num_cols) break;
 
         const col_type = c.sqlite3_column_type(stmt, @intCast(i));
         const is_null = col_type == c.SQLITE_NULL;
 
         if (!is_null) {
-            switch (field.type) {
-                i32 => @field(item, field.name) = c.sqlite3_column_int(stmt, @intCast(i)),
-                bool => @field(item, field.name) = c.sqlite3_column_int(stmt, @intCast(i)) != 0,
+            switch (ftype) {
+                i32 => @field(item, fname) = c.sqlite3_column_int(stmt, @intCast(i)),
+                bool => @field(item, fname) = c.sqlite3_column_int(stmt, @intCast(i)) != 0,
                 []const u8 => {
                     const text_ptr = c.sqlite3_column_text(stmt, @intCast(i));
                     const text_len = @as(usize, @intCast(c.sqlite3_column_bytes(stmt, @intCast(i))));
                     const text_slice = text_ptr[0..text_len];
-                    @field(item, field.name) = try arena.dupe(u8, text_slice);
+                    @field(item, fname) = try arena.dupe(u8, text_slice);
                 },
-                else => @compileError("Unsupported field type: " ++ @typeName(field.type)),
+                else => @compileError("Unsupported field type: " ++ @typeName(ftype)),
             }
         } else {
             // Para campos que podem ser nulos, precisaríamos de Optionals
             // Por enquanto, vamos usar valores padrão
-            switch (field.type) {
-                i32 => @field(item, field.name) = 0,
-                bool => @field(item, field.name) = false,
-                []const u8 => @field(item, field.name) = "",
-                else => @compileError("Unsupported field type: " ++ @typeName(field.type)),
+            switch (ftype) {
+                i32 => @field(item, fname) = 0,
+                bool => @field(item, fname) = false,
+                []const u8 => @field(item, fname) = "",
+                else => @compileError("Unsupported field type: " ++ @typeName(ftype)),
             }
         }
     }

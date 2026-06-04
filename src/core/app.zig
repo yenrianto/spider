@@ -365,10 +365,10 @@ pub const ListenOptions = struct {
 };
 
 fn findFieldName(comptime T: type, comptime ParamType: type) []const u8 {
-    const T_info = @typeInfo(T);
-    inline for (T_info.@"struct".fields) |f| {
-        if (f.type == ParamType) {
-            return f.name;
+    const T_info = @typeInfo(T).@"struct";
+    inline for (T_info.field_names, T_info.field_types) |fname, ftype| {
+        if (ftype == ParamType) {
+            return fname;
         }
     }
     @compileError("field not found");
@@ -376,18 +376,18 @@ fn findFieldName(comptime T: type, comptime ParamType: type) []const u8 {
 
 fn buildWrapper(comptime handler: anytype, comptime T: type) Handler {
     const fn_info = @typeInfo(@TypeOf(handler)).@"fn";
-    const extra = fn_info.params[1..];
+    const extra = fn_info.param_types[1..];
     const extra_len = extra.len;
 
     if (extra_len == 0) return @as(Handler, handler);
 
     comptime {
-        const T_info = @typeInfo(T);
+        const T_info = @typeInfo(T).@"struct";
         for (extra) |p| {
-            const pt = p.type orelse @compileError("generic param not supported");
+            const pt = p orelse @compileError("generic param not supported");
             var found = false;
-            for (T_info.@"struct".fields) |f| {
-                if (f.type == pt) found = true;
+            for (T_info.field_types) |ft| {
+                if (ft == pt) found = true;
             }
             if (!found) {
                 @compileError(std.fmt.comptimePrint(
@@ -404,25 +404,25 @@ fn buildWrapper(comptime handler: anytype, comptime T: type) Handler {
             const decos: *const T = @as(*const T, @ptrCast(@alignCast(ctx._decorations.?)));
 
             if (extra_len == 1) {
-                const f0 = comptime findFieldName(T, extra[0].type.?);
+                const f0 = comptime findFieldName(T, extra[0].?);
                 return handler(ctx, @field(decos, f0));
             }
             if (extra_len == 2) {
-                const f0 = comptime findFieldName(T, extra[0].type.?);
-                const f1 = comptime findFieldName(T, extra[1].type.?);
+                const f0 = comptime findFieldName(T, extra[0].?);
+                const f1 = comptime findFieldName(T, extra[1].?);
                 return handler(ctx, @field(decos, f0), @field(decos, f1));
             }
             if (extra_len == 3) {
-                const f0 = comptime findFieldName(T, extra[0].type.?);
-                const f1 = comptime findFieldName(T, extra[1].type.?);
-                const f2 = comptime findFieldName(T, extra[2].type.?);
+                const f0 = comptime findFieldName(T, extra[0].?);
+                const f1 = comptime findFieldName(T, extra[1].?);
+                const f2 = comptime findFieldName(T, extra[2].?);
                 return handler(ctx, @field(decos, f0), @field(decos, f1), @field(decos, f2));
             }
             if (extra_len == 4) {
-                const f0 = comptime findFieldName(T, extra[0].type.?);
-                const f1 = comptime findFieldName(T, extra[1].type.?);
-                const f2 = comptime findFieldName(T, extra[2].type.?);
-                const f3 = comptime findFieldName(T, extra[3].type.?);
+                const f0 = comptime findFieldName(T, extra[0].?);
+                const f1 = comptime findFieldName(T, extra[1].?);
+                const f2 = comptime findFieldName(T, extra[2].?);
+                const f3 = comptime findFieldName(T, extra[3].?);
                 return handler(ctx, @field(decos, f0), @field(decos, f1), @field(decos, f2), @field(decos, f3));
             }
             @compileError("max 4 extra params supported");

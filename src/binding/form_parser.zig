@@ -96,9 +96,10 @@ pub const FormParser = struct {
 
     pub fn fromMultipartData(data: *const multipart.MultipartData, allocator: std.mem.Allocator, comptime T: type) !T {
         var result: T = undefined;
-        inline for (@typeInfo(T).@"struct".fields) |field| {
-            const name = field.name;
-            const T2 = field.type;
+        const info = @typeInfo(T).@"struct";
+        inline for (info.field_names, info.field_types) |fname, ftype| {
+            const name = fname;
+            const T2 = ftype;
             const is_optional = @typeInfo(T2) == .optional;
             const InnerType = if (is_optional) @typeInfo(T2).optional.child else T2;
 
@@ -119,7 +120,7 @@ pub const FormParser = struct {
                 }
             } else {
                 const raw_value = data.getValue(name);
-                try setField(&result, field.name, allocator, raw_value, InnerType, is_optional);
+                try setField(&result, name, allocator, raw_value, InnerType, is_optional);
             }
         }
         return result;
@@ -136,13 +137,14 @@ pub const FormParser = struct {
         if (@typeInfo(T) != .@"struct") {
             @compileError("parseInto requires a struct type");
         }
-        inline for (@typeInfo(T).@"struct".fields) |field| {
-            const name = field.name;
+        const info2 = @typeInfo(T).@"struct";
+        inline for (info2.field_names, info2.field_types) |fname, ftype| {
+            const name = fname;
             const raw_value = self.data.get(name);
-            const T2 = field.type;
+            const T2 = ftype;
             const is_optional = @typeInfo(T2) == .optional;
             const InnerType = if (is_optional) @typeInfo(T2).optional.child else T2;
-            try setField(result, field.name, self.allocator, raw_value, InnerType, is_optional);
+            try setField(result, name, self.allocator, raw_value, InnerType, is_optional);
         }
     }
 };

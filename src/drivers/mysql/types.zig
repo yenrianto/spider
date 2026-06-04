@@ -219,31 +219,31 @@ pub fn mapRowToStruct(
     const info = @typeInfo(T);
     if (info != .@"struct") @compileError("T must be a struct");
 
-    inline for (info.@"struct".fields) |field| {
+    inline for (info.@"struct".field_names, info.@"struct".field_types) |field_name, field_type| {
         var found = false;
         for (field_names, 0..) |name, col_idx| {
-            if (std.mem.eql(u8, name, field.name)) {
+            if (std.mem.eql(u8, name, field_name)) {
                 const col_data = row[col_idx] orelse {
-                    @field(result, field.name) = switch (@typeInfo(field.type)) {
+                    @field(result, field_name) = switch (@typeInfo(field_type)) {
                         .optional => null,
-                        .pointer => @as(field.type, ""),
-                        .int => @as(field.type, 0),
+                        .pointer => @as(field_type, ""),
+                        .int => @as(field_type, 0),
                         .bool => false,
                         else => undefined,
                     };
                     found = true;
                     break;
                 };
-                @field(result, field.name) = try parseField(field.type, col_data, allocator);
+                @field(result, field_name) = try parseField(field_type, col_data, allocator);
                 found = true;
                 break;
             }
         }
         if (!found) {
-            @field(result, field.name) = switch (@typeInfo(field.type)) {
+            @field(result, field_name) = switch (@typeInfo(field_type)) {
                 .optional => null,
-                .pointer => @as(field.type, ""),
-                .int => @as(field.type, 0),
+                .pointer => @as(field_type, ""),
+                .int => @as(field_type, 0),
                 .bool => false,
                 else => undefined,
             };

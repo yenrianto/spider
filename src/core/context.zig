@@ -136,10 +136,10 @@ pub const Ctx = struct {
                     j += 1;
                 }
                 const normalized = buf[0..j];
-                inline for (std.meta.fields(Templates)) |field| {
-                    if (std.mem.eql(u8, field.name, normalized)) {
+                inline for (@typeInfo(Templates).@"struct".field_names) |fname| {
+                    if (std.mem.eql(u8, fname, normalized)) {
                         const instance: Templates = .{};
-                        break :blk @field(instance, field.name);
+                        break :blk @field(instance, fname);
                     }
                 }
                 self._last_template = name;
@@ -172,11 +172,11 @@ pub const Ctx = struct {
             }
 
             const embed_inst: Templates = .{};
-            inline for (std.meta.fields(Templates)) |field| {
-                const content: []const u8 = @field(embed_inst, field.name);
-                try components.put(self.arena, try self.arena.dupe(u8, field.name), try self.arena.dupe(u8, content));
-                if (comptime std.mem.startsWith(u8, field.name, "components_")) {
-                    const alias = field.name["components_".len..];
+            inline for (@typeInfo(Templates).@"struct".field_names) |fname| {
+                const content: []const u8 = @field(embed_inst, fname);
+                try components.put(self.arena, try self.arena.dupe(u8, fname), try self.arena.dupe(u8, content));
+                if (comptime std.mem.startsWith(u8, fname, "components_")) {
+                    const alias = fname["components_".len..];
                     try components.put(self.arena, try self.arena.dupe(u8, alias), try self.arena.dupe(u8, content));
                 }
             }
