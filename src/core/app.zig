@@ -579,12 +579,15 @@ pub fn Server(comptime T: type) type {
             self.route_middlewares.deinit(std.heap.page_allocator);
             self.router.deinit();
             for (self.ws_route_hubs.items) |*rh| {
+                rh.threaded.deinit();
                 rh.hub.deinit();
                 std.heap.smp_allocator.destroy(rh.hub);
             }
             self.ws_route_hubs.deinit(std.heap.smp_allocator);
             if (self.sse_hub) |*h| h.deinit();
+            if (self.sse_threaded) |*t| t.deinit();
             self.interval_threads.deinit(std.heap.smp_allocator);
+            if (self._db) |db| db.deinit();
             _ = self.spider_gpa.deinit();
             self.spider_arena.deinit();
         }
