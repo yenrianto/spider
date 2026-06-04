@@ -26,6 +26,9 @@ pub const Hub = struct {
     }
 
     pub fn deinit(self: *Hub) void {
+        for (self.connections.items) |conn| {
+            conn.stream.close(self.io);
+        }
         self.connections.deinit(self.allocator);
     }
 

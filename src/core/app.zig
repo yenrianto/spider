@@ -512,16 +512,20 @@ const IntervalEntry = struct {
     ms: u64,
     callback: *const fn (*Hub) void,
     io: std.Io,
+    running: std.atomic.Value(bool) = std.atomic.Value(bool).init(true),
+    thread: ?std.Thread = null,
 };
 
-fn intervalLoop(entry: IntervalEntry) void {
-    while (true) {
+fn intervalLoop(entry: *IntervalEntry) void {
+    while (entry.running.load(.acquire)) {
         std.Io.sleep(
             entry.io,
             std.Io.Duration.fromMilliseconds(@as(i64, @intCast(entry.ms))),
             .real,
         ) catch {};
-        entry.callback(entry.hub);
+        if (entry.running.load(.acquire)) {
+            entry.callback(entry.hub);
+        }
     }
 }
 
@@ -575,6 +579,12 @@ pub fn Server(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
+            for (self.interval_threads.items) |*e| {
+                e.running.store(false, .release);
+            }
+            for (self.interval_threads.items) |*e| {
+                if (e.thread) |t| t.join();
+            }
             if (self.views_index) |*idx| idx.deinit();
             self.route_middlewares.deinit(std.heap.page_allocator);
             self.router.deinit();
@@ -776,8 +786,7 @@ pub fn Server(comptime T: type) type {
 
             for (self.interval_threads.items) |*entry| {
                 entry.io = io;
-                const t = std.Thread.spawn(.{}, intervalLoop, .{entry.*}) catch continue;
-                t.detach();
+                entry.thread = std.Thread.spawn(.{}, intervalLoop, .{entry}) catch continue;
             }
 
             const cpu_count = std.Thread.getCpuCount() catch 2;
@@ -843,6 +852,7 @@ pub fn app(decorations: anytype) AppType(@TypeOf(decorations)) {
     s.decorations = decorations;
     s.config = cfg;
     var threaded = std.Io.Threaded.init_single_threaded;
+    defer threaded.deinit();
     const io = threaded.io();
     const views_dir = cfg.views_dir orelse "src";
     s.views_index = views_mod.buildIndex(io, std.heap.smp_allocator, views_dir) catch null;
@@ -863,6 +873,7 @@ pub fn appWithConfig(config: Config) Server(EmptyDeco) {
     var s = Server(EmptyDeco).init();
     s.config = config;
     var threaded = std.Io.Threaded.init_single_threaded;
+    defer threaded.deinit();
     const io = threaded.io();
     const views_dir = config.views_dir orelse "src";
     s.views_index = views_mod.buildIndex(io, std.heap.smp_allocator, views_dir) catch null;

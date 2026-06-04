@@ -51,6 +51,13 @@ pub fn buildIndex(
     root_dir: []const u8,
 ) !ViewsIndex {
     var entries: std.ArrayList(TemplateEntry) = .empty;
+    errdefer {
+        for (entries.items) |e| {
+            allocator.free(e.name);
+            allocator.free(e.path);
+        }
+        entries.deinit(allocator);
+    }
 
     const cwd = std.Io.Dir.cwd();
     var dir = cwd.openDir(io, root_dir, .{ .iterate = true }) catch {
