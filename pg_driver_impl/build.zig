@@ -18,15 +18,13 @@ pub fn build(b: *std.Build) !void {
     // <openssl/ssl.h> isn't reachable — e.g. when -Dtarget switches Zig into
     // cross-compile mode and stops searching the system include paths.
     const openssl_module = if (openssl) blk: {
-        const Translator = @import("translate_c").Translator;
-        const translate_c = b.dependency("translate_c", .{});
-        const t: Translator = .init(translate_c, .{
-            .c_source_file = b.path("src/openssl.h"),
+        const tc = b.addTranslateC(.{
+            .root_source_file = b.path("src/openssl.h"),
             .target = target,
             .optimize = optimize,
         });
-        if (openssl_include_path) |p| t.addIncludePath(p);
-        break :blk t.mod;
+        if (openssl_include_path) |p| tc.addIncludePath(p);
+        break :blk tc.createModule();
     } else b.createModule(.{ .root_source_file = b.path("src/openssl_stub.zig") });
 
     // Expose this as a module that others can import
@@ -36,7 +34,6 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("src/pg.zig"),
         .imports = &.{
             .{ .name = "buffer", .module = b.dependency("buffer", dep_opts).module("buffer") },
-            .{ .name = "metrics", .module = b.dependency("metrics", dep_opts).module("metrics") },
             .{ .name = "openssl", .module = openssl_module },
         },
     });
@@ -64,14 +61,14 @@ pub fn build(b: *std.Build) !void {
 
     {
         // test step — always built with openssl enabled
-        const Translator = @import("translate_c").Translator;
-        const translate_c = b.dependency("translate_c", .{});
-        const t: Translator = .init(translate_c, .{
-            .c_source_file = b.path("src/openssl.h"),
-            .target = target,
-            .optimize = optimize,
-        });
-        if (openssl_include_path) |p| t.addIncludePath(p);
+        const test_openssl_module = if (openssl) openssl_module else blk: {
+            const tc = b.addTranslateC(.{
+                .root_source_file = b.path("src/openssl.h"),
+                .target = target,
+                .optimize = optimize,
+            });
+            break :blk tc.createModule();
+        };
 
         const lib_test = b.addTest(.{
             .root_module = b.createModule(.{
@@ -80,8 +77,7 @@ pub fn build(b: *std.Build) !void {
                 .root_source_file = b.path("src/pg.zig"),
                 .imports = &.{
                     .{ .name = "buffer", .module = b.dependency("buffer", dep_opts).module("buffer") },
-                    .{ .name = "metrics", .module = b.dependency("metrics", dep_opts).module("metrics") },
-                    .{ .name = "openssl", .module = t.mod },
+                            .{ .name = "openssl", .module = test_openssl_module },
                 },
             }),
             .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },

@@ -212,7 +212,7 @@ pub const Listener = struct {
 
 const t = lib.testing;
 test "Listener" {
-    var l = try Listener.open(t.io, t.allocator, .{ .host = "127.0.0.1" });
+    var l = try Listener.open(t.io, t.allocator, .{ .host = "127.0.0.1", .port = t.getTestPort() });
     defer l.deinit();
     try l.auth(t.authOpts(.{}));
     try testListener(&l);
@@ -221,6 +221,7 @@ test "Listener" {
 test "Listener: from Pool" {
     var pool = try lib.Pool.init(t.io, t.allocator, .{
         .size = 1,
+        .connect = .{ .port = t.getTestPort() },
         .auth = t.authOpts(.{}),
     });
     defer pool.deinit();

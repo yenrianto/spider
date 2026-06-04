@@ -556,13 +556,13 @@ pub const Conn = struct {
 
 const t = lib.testing;
 test "Conn: auth trust (no pass)" {
-    var conn = try Conn.open(t.io, t.allocator, .{});
+    var conn = try Conn.open(t.io, t.allocator, .{ .port = t.getTestPort() });
     defer conn.deinit();
     try conn.auth(.{ .username = "pgz_user_nopass", .database = "postgres" });
 }
 
 test "Conn: auth unknown user" {
-    var conn = try Conn.open(t.io, t.allocator, .{});
+    var conn = try Conn.open(t.io, t.allocator, .{ .port = t.getTestPort() });
     defer conn.deinit();
     try t.expectError(error.PG, conn.auth(.{ .username = "does_not_exist" }));
     try t.expectEqual(true, std.mem.find(u8, conn.err.?.message, "user \"does_not_exist\"") != null);
@@ -570,21 +570,21 @@ test "Conn: auth unknown user" {
 
 test "Conn: auth cleartext password" {
     {
-        var conn = try Conn.open(t.io, t.allocator, .{});
+        var conn = try Conn.open(t.io, t.allocator, .{ .port = t.getTestPort() });
         defer conn.deinit();
         try t.expectError(error.PG, conn.auth(.{ .username = "pgz_user_clear" }));
         try t.expectString("empty password returned by client", conn.err.?.message);
     }
 
     {
-        var conn = try Conn.open(t.io, t.allocator, .{});
+        var conn = try Conn.open(t.io, t.allocator, .{ .port = t.getTestPort() });
         defer conn.deinit();
         try t.expectError(error.PG, conn.auth(.{ .username = "pgz_user_clear", .password = "wrong" }));
         try t.expectString("password authentication failed for user \"pgz_user_clear\"", conn.err.?.message);
     }
 
     {
-        var conn = try Conn.open(t.io, t.allocator, .{});
+        var conn = try Conn.open(t.io, t.allocator, .{ .port = t.getTestPort() });
         defer conn.deinit();
         try conn.auth(.{ .username = "pgz_user_clear", .password = "pgz_user_clear_pw", .database = "postgres" });
     }
@@ -592,21 +592,21 @@ test "Conn: auth cleartext password" {
 
 test "Conn: auth scram-sha-256 password" {
     {
-        var conn = try Conn.open(t.io, t.allocator, .{});
+        var conn = try Conn.open(t.io, t.allocator, .{ .port = t.getTestPort() });
         defer conn.deinit();
         try t.expectError(error.PG, conn.auth(.{ .username = "pgz_user_scram_sha256" }));
         try t.expectString("password authentication failed for user \"pgz_user_scram_sha256\"", conn.err.?.message);
     }
 
     {
-        var conn = try Conn.open(t.io, t.allocator, .{});
+        var conn = try Conn.open(t.io, t.allocator, .{ .port = t.getTestPort() });
         defer conn.deinit();
         try t.expectError(error.PG, conn.auth(.{ .username = "pgz_user_scram_sha256", .password = "wrong" }));
         try t.expectString("password authentication failed for user \"pgz_user_scram_sha256\"", conn.err.?.message);
     }
 
     {
-        var conn = try Conn.open(t.io, t.allocator, .{});
+        var conn = try Conn.open(t.io, t.allocator, .{ .port = t.getTestPort() });
         defer conn.deinit();
         try conn.auth(.{ .username = "pgz_user_scram_sha256", .password = "pgz_user_scram_sha256_pw", .database = "postgres" });
     }
@@ -1752,19 +1752,29 @@ test "PG: large read" {
 
     {
         // want this to be larger than our read_buffer
-        var rows = try c.query("select $1::text", .{"!" * *1000});
+        const expected1000 = comptime blk: {
+            var buf: [1000]u8 = undefined;
+            @memset(&buf, '!');
+            break :blk buf;
+        };
+        var rows = try c.query("select $1::text", .{&expected1000});
         defer rows.deinit();
 
         const row = (try rows.nextUnsafe()).?;
-        try t.expectString("!" * *1000, row.get([]u8, 0));
+        try t.expectString(&expected1000, row.get([]u8, 0));
         try t.expectEqual(null, try rows.next());
     }
 
     {
         // with a row
-        var row = (try c.rowUnsafe("select $1::text", .{"z" * *1000})).?;
+        const expected_z1000 = comptime blk: {
+            var buf: [1000]u8 = undefined;
+            @memset(&buf, 'z');
+            break :blk buf;
+        };
+        var row = (try c.rowUnsafe("select $1::text", .{&expected_z1000})).?;
         defer row.deinit() catch {};
-        try t.expectString("z" * *1000, row.get([]u8, 0));
+        try t.expectString(&expected_z1000, row.get([]u8, 0));
     }
 }
 
@@ -1772,11 +1782,16 @@ test "Conn: dynamic buffer freed on error" {
     var c = try t.connect(.{ .read_buffer = 100 });
     defer c.deinit();
 
-    var rows = try c.query("select $1::text", .{"!" * *200});
+    const expected200 = comptime blk: {
+        var buf: [200]u8 = undefined;
+        @memset(&buf, '!');
+        break :blk buf;
+    };
+    var rows = try c.query("select $1::text", .{&expected200});
     defer rows.deinit();
 
     const row = (try rows.nextUnsafe()).?;
-    try t.expectString("!" * *200, row.get([]u8, 0));
+    try t.expectString(&expected200, row.get([]u8, 0));
 
     // we end here, simulating the app returning an error. This causes
     // rows.deinit() and c.deinit() to be called prematurely (from
@@ -1809,7 +1824,7 @@ test "PG: Record" {
 }
 
 test "Conn: application_name" {
-    var conn = try Conn.open(t.io, t.allocator, .{});
+    var conn = try Conn.open(t.io, t.allocator, .{ .port = t.getTestPort() });
     defer conn.deinit();
     try conn.auth(.{
         .username = "pgz_user_clear",
@@ -1860,7 +1875,7 @@ test "PG: eager error" {
 
 // https://github.com/karlseguin/pg.zig/issues/44
 test "PG: eager error conn state" {
-    var pool = try lib.Pool.init(t.io, t.allocator, .{ .size = 1, .auth = t.authOpts(.{}) });
+    var pool = try lib.Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) });
     defer pool.deinit();
 
     {
@@ -1883,7 +1898,7 @@ test "PG: eager error conn state" {
 
 // https://github.com/karlseguin/pg.zig/issues/45
 test "PG: rollback during error" {
-    var pool = try lib.Pool.init(t.io, t.allocator, .{ .size = 1, .auth = t.authOpts(.{}) });
+    var pool = try lib.Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) });
     defer pool.deinit();
 
     _ = try pool.exec("truncate table all_types", .{});
@@ -1915,14 +1930,14 @@ test "PG: rollback during error" {
 }
 
 test "open URI" {
-    const uri = try std.Uri.parse("postgresql://postgres:postgres@127.0.0.1:5432/postgres?tcp_user_timeout=5000");
+    const uri = try std.Uri.parse("postgresql://postgres:postgres@127.0.0.1:5433/postgres?tcp_user_timeout=5000");
     var conn = try Conn.openAndAuthUri(t.io, t.allocator, uri);
     conn.deinit();
 }
 
 test "Conn: TLS required" {
     {
-        var conn = try Conn.open(t.io, t.allocator, .{ .tls = .off });
+        var conn = try Conn.open(t.io, t.allocator, .{ .tls = .off, .port = t.getTestPort() });
         defer conn.deinit();
         try t.expectError(error.PG, conn.auth(.{ .username = "pgz_user_ssl" }));
         try t.expectEqual(true, std.mem.find(u8, conn.err.?.message, "no encryption") != null);
@@ -1935,7 +1950,7 @@ test "Conn: TLS required" {
 }
 
 test "Conn: TLS verify-full" {
-    try t.expectError(error.SSLCertificationVerificationError, Conn.open(t.io, t.allocator, .{ .tls = .{ .verify_full = null } }));
+    try t.expectError(error.SSLCertificationVerificationError, Conn.open(t.io, t.allocator, .{ .tls = .{ .verify_full = null }, .port = t.getTestPort() }));
 
     {
         var conn = try t.connect(.{ .tls = Conn.Opts.TLS{ .verify_full = "tests/root.crt" }, .username = "pgz_user_ssl", .password = "pgz_user_ssl_pw" });

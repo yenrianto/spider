@@ -7,6 +7,25 @@ const Conn = lib.Conn;
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 
+const Field = struct {
+    name: []const u8,
+    type: type,
+    default_value_ptr: ?*const anyopaque,
+};
+
+fn structFields(comptime T: type) struct { fields: [@typeInfo(T).@"struct".field_names.len]Field } {
+    const info = @typeInfo(T).@"struct";
+    var out: [info.field_names.len]Field = undefined;
+    inline for (info.field_names, info.field_types, info.field_attrs, 0..) |name, ft, attrs, i| {
+        out[i] = .{
+            .name = name,
+            .type = ft,
+            .default_value_ptr = attrs.default_value_ptr,
+        };
+    }
+    return .{ .fields = out };
+}
+
 pub const Result = struct {
     number_of_columns: usize,
 
@@ -146,9 +165,9 @@ pub const Result = struct {
     };
 
     pub fn mapper(self: *Result, comptime T: type, opts: MapperOpts) Mapper(T) {
-        var column_indexes: [std.meta.fields(T).len]?usize = undefined;
+        var column_indexes: [structFields(T).fields.len]?usize = undefined;
 
-        inline for (std.meta.fields(T), 0..) |field, i| {
+        inline for (structFields(T).fields, 0..) |field, i| {
             column_indexes[i] = self.columnIndex(field.name);
         }
 
@@ -366,7 +385,7 @@ pub fn RowT(comptime fail_mode: lib.FailMode) type {
 
         fn toUsingOrdinal(self: *const Self, T: type, allocator: ?Allocator) !T {
             var value: T = undefined;
-            inline for (std.meta.fields(T), 0..) |field, column_index| {
+            inline for (structFields(T).fields, 0..) |field, column_index| {
                 @field(value, field.name) = try self.mapColumn(&field, column_index, allocator);
             }
             return value;
@@ -375,14 +394,14 @@ pub fn RowT(comptime fail_mode: lib.FailMode) type {
         fn toUsingName(self: *const Self, T: type, allocator: ?Allocator) !T {
             var value: T = undefined;
             const result = self._result;
-            inline for (std.meta.fields(T)) |field| {
+            inline for (structFields(T).fields) |field| {
                 const name = field.name;
                 @field(value, name) = try self.mapColumn(&field, result.columnIndex(name), allocator);
             }
             return value;
         }
 
-        fn mapColumn(self: *const Self, comptime field: *const std.builtin.Type.StructField, optional_column_index: ?usize, allocator: ?Allocator) !field.type {
+        fn mapColumn(self: *const Self, comptime field: *const Field, optional_column_index: ?usize, allocator: ?Allocator) !field.type {
             const T = field.type;
             const column_index = optional_column_index orelse {
                 if (field.default_value_ptr) |dflt| {
@@ -451,7 +470,7 @@ pub fn Mapper(comptime T: type) type {
     return struct {
         result: *Result,
         allocator: ?Allocator,
-        column_indexes: [std.meta.fields(T).len]?usize,
+        column_indexes: [structFields(T).fields.len]?usize,
 
         const Self = @This();
 
@@ -461,7 +480,7 @@ pub fn Mapper(comptime T: type) type {
             var value: T = undefined;
 
             const allocator = self.allocator;
-            inline for (std.meta.fields(T), self.column_indexes) |field, optional_column_index| {
+            inline for (structFields(T).fields, self.column_indexes) |field, optional_column_index| {
                 @field(value, field.name) = try row.mapColumn(&field, optional_column_index, allocator);
             }
             return value;

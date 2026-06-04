@@ -67,7 +67,7 @@ pub const Pool = struct {
                 .off => {},
                 else => |tls_config| {
                     if (opts.connect.host) |h| {
-                        opts_copy.connect._hostz = try aa.dupeZ(u8, h);
+                        opts_copy.connect._hostz = try aa.dupeSentinel(u8, h, 0);
                     }
                     ssl_ctx = try lib.initializeSSLContext(tls_config);
                 },
@@ -394,6 +394,7 @@ test "Pool" {
     var pool = try Pool.init(t.io, t.allocator, .{
         .size = 2,
         .auth = t.authOpts(.{}),
+        .connect = .{ .port = t.getTestPort() },
         .connect_on_init_count = 1,
     });
     defer pool.deinit();
@@ -427,6 +428,7 @@ test "Pool" {
 test "Pool: Release" {
     var pool = try Pool.init(t.io, t.allocator, .{
         .size = 2,
+        .connect = .{ .port = t.getTestPort() },
         .auth = .{
             .database = "postgres",
             .username = "postgres",
@@ -443,6 +445,7 @@ test "Pool: Release" {
 test "Pool: stats" {
     var pool = try Pool.init(t.io, t.allocator, .{
         .size = 3,
+        .connect = .{ .port = t.getTestPort() },
         .auth = t.authOpts(.{}),
     });
     defer pool.deinit();
@@ -498,7 +501,7 @@ test "Pool: stats" {
 }
 
 test "Pool: exec" {
-    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .auth = t.authOpts(.{}) });
+    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) });
     defer pool.deinit();
 
     {
@@ -514,7 +517,7 @@ test "Pool: exec" {
 }
 
 test "Pool: Query/Row" {
-    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .auth = t.authOpts(.{}) });
+    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) });
     defer pool.deinit();
 
     {
@@ -547,7 +550,7 @@ test "Pool: Query/Row" {
 }
 
 test "Pool: Row error" {
-    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .auth = t.authOpts(.{}) });
+    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) });
     defer pool.deinit();
 
     _ = try pool.rowUnsafe("insert into all_types (id) values ($1)", .{200});
