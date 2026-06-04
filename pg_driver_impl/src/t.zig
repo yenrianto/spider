@@ -195,12 +195,17 @@ pub const Stream = struct {
     }
 };
 
+pub fn getTestPort() u16 {
+    return 5433;
+}
+
 pub fn connect(opts: anytype) !Conn {
     const T = @TypeOf(opts);
 
     var c = try Conn.open(io, allocator, .{
         .tls = if (@hasField(T, "tls")) opts.tls else .off,
         .host = if (@hasField(T, "host")) opts.host else "127.0.0.1",
+        .port = if (@hasField(T, "port")) opts.port else getTestPort(),
         .read_buffer = if (@hasField(T, "read_buffer")) opts.read_buffer else 2000,
     });
 

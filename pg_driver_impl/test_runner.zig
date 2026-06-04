@@ -1,17 +1,6 @@
-// This is for the Zig 0.16.
-
-// See https://gist.github.com/karlseguin/c6bea5b35e4e8d26af6f81c22cb5d76b/eb15512d6ae49663fa9df6c7a9725b20dab43edd
-// for a version that workson Zig 0.15.2.
-
-// See https://gist.github.com/karlseguin/c6bea5b35e4e8d26af6f81c22cb5d76b/1f317ebc9cd09bc50fd5591d09c34255e15d1d85
-// for a version that workson Zig 0.14.1.
-
-// in your build.zig, you can specify a custom test runner:
-// const tests = b.addTest(.{
-//    .root_module = $MODULE_BEING_TESTED,
-//    .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
-// });
-
+// Custom test runner for Zig 0.17.
+// Uses Io.Threaded.init (multi-threaded) to support concurrent pool operations.
+//
 // in your build.zig, you can specify a custom test runner:
 // const tests = b.addTest(.{
 //    .root_module = $MODULE_BEING_TESTED,
@@ -24,7 +13,7 @@ const builtin = @import("builtin");
 
 const Allocator = std.mem.Allocator;
 
-const BORDER = "=" ** 80;
+const BORDER = "================================================================================";
 
 // use in custom panic handler
 var current_test: ?[]const u8 = null;
@@ -37,10 +26,7 @@ pub fn main(init: std.process.Init) !void {
 
     const env = Env.init(init.environ_map);
 
-    std.testing.io_instance = .init(init.gpa, .{
-        .argv0 = .init(init.minimal.args),
-        .environ = init.minimal.environ,
-    });
+    std.testing.io_instance = std.Io.Threaded.init(std.heap.page_allocator, .{});
     defer std.testing.io_instance.deinit();
 
     const io = std.testing.io;
@@ -55,6 +41,7 @@ pub fn main(init: std.process.Init) !void {
 
     Printer.fmt("\r\x1b[0K", .{}); // beginning of line and clear to end of line
 
+    std.testing.allocator_instance = .init(std.heap.page_allocator, .{});
     for (builtin.test_functions) |t| {
         if (isSetup(t)) {
             t.func() catch |err| {
@@ -92,13 +79,13 @@ pub fn main(init: std.process.Init) !void {
         };
 
         current_test = friendly_name;
-        std.testing.allocator_instance = .{};
+        std.testing.allocator_instance = .init(std.heap.page_allocator, .{});
         const result = t.func();
         current_test = null;
 
         const ns_taken = slowest.endTiming(io, friendly_name);
 
-        if (std.testing.allocator_instance.deinit() == .leak) {
+        if (std.testing.allocator_instance.deinit() > 0) {
             leak += 1;
             Printer.status(.fail, "\n{s}\n\"{s}\" - Memory Leak\n{s}\n", .{ BORDER, friendly_name, BORDER });
         }
@@ -131,6 +118,7 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
+    std.testing.allocator_instance = .init(std.heap.page_allocator, .{});
     for (builtin.test_functions) |t| {
         if (isTeardown(t)) {
             t.func() catch |err| {
