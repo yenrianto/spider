@@ -9,7 +9,7 @@
             .hash = "pacman-0.1.0-SPnstbOVAAD--xa2EH3HBKetiiD2i-TRZlgeXldb9M74",
         },
         .pg = .{
-            .path = "pg_driver_impl",
+            .path = "modules/pg/pg_driver_impl",
         },
     },
     .paths = .{
@@ -19,6 +19,6 @@
         "lib.zig",
         "includes",
         "README.md",
-        "pg_driver_impl",
+        "modules",
     },
 }

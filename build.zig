@@ -91,14 +91,23 @@ pub fn build(b: *std.Build) void {
 
     // test-pg — pg wrapper integration tests (requires PostgreSQL)
     const pg_lib_mod = pg_dep.module("pg");
+
+    const spider_core_mod = b.createModule(.{
+        .root_source_file = b.path("src/spider_core_for_pg.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+
     const pg_test = b.addTest(.{
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/pg_test_root.zig"),
+            .root_source_file = b.path("pg_test_root.zig"),
             .target = target,
             .optimize = optimize,
             .link_libc = true,
             .imports = &.{
                 .{ .name = "pg", .module = pg_lib_mod },
+                .{ .name = "spider", .module = spider_core_mod },
             },
         }),
         .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },

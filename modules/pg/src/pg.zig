@@ -1,6 +1,6 @@
 const std = @import("std");
 const pg_lib = @import("pg");
-const env = @import("../../internal/env.zig");
+const env = @import("spider").env;
 
 /// Marker type for PostgreSQL array parameters that should use ANY() pattern
 pub fn ArrayParameter(comptime T: type) type {
@@ -411,7 +411,7 @@ fn pgDeinitFn(_: *anyopaque) void {}
 pub const PgDriver = struct {
     _dummy: u8 = 0,
 
-    pub fn database(_: *PgDriver) @import("../../core/database.zig").Database {
+    pub fn database(_: *PgDriver) @import("spider").Database {
         return .{
             .ptr = @constCast(db_pool orelse @panic("PostgreSQL not initialized")),
             .exec_fn = pgExecFn,
