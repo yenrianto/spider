@@ -81,11 +81,30 @@ pub fn build(b: *std.Build) void {
     // const run_step = b.step("run", "Run dev test server");
     // run_step.dependOn(&run_dev.step);
 
-    // tests
+    // tests — existing module tests
     const mod_tests = b.addTest(.{
         .root_module = mod,
     });
     const run_mod_tests = b.addRunArtifact(mod_tests);
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
+
+    // test-pg — pg wrapper integration tests (requires PostgreSQL)
+    const pg_lib_mod = pg_dep.module("pg");
+    const pg_test = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/pg_test_root.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "pg", .module = pg_lib_mod },
+            },
+        }),
+        .test_runner = .{ .path = b.path("test_runner.zig"), .mode = .simple },
+    });
+    const run_pg_tests = b.addRunArtifact(pg_test);
+    run_pg_tests.has_side_effects = true;
+    const test_pg_step = b.step("test-pg", "Run pg wrapper integration tests");
+    test_pg_step.dependOn(&run_pg_tests.step);
 }

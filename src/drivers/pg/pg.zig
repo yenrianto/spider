@@ -687,9 +687,13 @@ fn cellToText(arena: std.mem.Allocator, data: []const u8, oid: i32) ![]const u8 
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
+var test_threaded: ?std.Io.Threaded = null;
+
 fn initTestDb(allocator: std.mem.Allocator) !void {
-    var threaded = std.Io.Threaded.init_single_threaded;
-    const io = threaded.io();
+    if (test_threaded == null) {
+        test_threaded = std.Io.Threaded.init(allocator, .{});
+    }
+    const io = test_threaded.?.io();
     try init(allocator, io, .{
         .host = null,
         .database = null,
@@ -772,4 +776,185 @@ test "transaction - commit" {
     const rows = try query(Row, arena.allocator(), "SELECT id FROM tx_test", .{});
     try std.testing.expectEqual(1, rows.len);
     try std.testing.expectEqual(99, rows[0].id);
+}
+
+test "queryOne - single row return" {
+    try initTestDb(std.testing.allocator);
+    defer deinit();
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    try execRaw("CREATE TEMP TABLE one_test (id integer, label text)");
+    defer execRaw("DROP TABLE IF EXISTS one_test") catch {};
+
+    try execRaw("INSERT INTO one_test VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma')");
+
+    const Row = struct { id: i32, label: []const u8 };
+    const row = try queryOne(Row, arena.allocator(), "SELECT id, label FROM one_test WHERE id = $1", .{@as(i32, 2)});
+    try std.testing.expect(row != null);
+    if (row) |r| {
+        try std.testing.expectEqual(2, r.id);
+        try std.testing.expectEqualStrings("beta", r.label);
+    }
+
+    const missing = try queryOne(Row, arena.allocator(), "SELECT id, label FROM one_test WHERE id = $1", .{@as(i32, 99)});
+    try std.testing.expect(missing == null);
+}
+
+test "queryExecute - DDL statement" {
+    try initTestDb(std.testing.allocator);
+    defer deinit();
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    try queryExecute(void, arena.allocator(), "CREATE TEMP TABLE ddl_test (x integer)");
+    defer execRaw("DROP TABLE IF EXISTS ddl_test") catch {};
+
+    try queryExecute(void, arena.allocator(), "INSERT INTO ddl_test VALUES (10), (20), (30)");
+
+    const Row = struct { x: i32 };
+    const rows = try query(Row, arena.allocator(), "SELECT x FROM ddl_test ORDER BY x", .{});
+    try std.testing.expectEqual(3, rows.len);
+    try std.testing.expectEqual(10, rows[0].x);
+    try std.testing.expectEqual(30, rows[2].x);
+}
+
+test "transaction - rollback" {
+    try initTestDb(std.testing.allocator);
+    defer deinit();
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    try execRaw("CREATE TEMP TABLE rb_test (id integer)");
+    defer execRaw("DROP TABLE IF EXISTS rb_test") catch {};
+
+    {
+        var tx = try begin();
+        try tx.query(void, arena.allocator(), "INSERT INTO rb_test VALUES ($1)", .{@as(i32, 42)});
+        tx.rollback();
+    }
+
+    const Row = struct { id: i32 };
+    const rows = try query(Row, arena.allocator(), "SELECT id FROM rb_test", .{});
+    try std.testing.expectEqual(0, rows.len);
+}
+
+test "Database bridge - exec via vtable" {
+    try initTestDb(std.testing.allocator);
+    defer deinit();
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var driver = PgDriver{};
+    const db = driver.database();
+
+    try db.exec("CREATE TEMP TABLE bridge_test (val integer)");
+    defer execRaw("DROP TABLE IF EXISTS bridge_test") catch {};
+
+    try db.exec("INSERT INTO bridge_test VALUES (100)");
+
+    const Row = struct { val: i32 };
+    const rows = try query(Row, arena.allocator(), "SELECT val FROM bridge_test", .{});
+    try std.testing.expectEqual(1, rows.len);
+    try std.testing.expectEqual(100, rows[0].val);
+}
+
+test "mapRow - i64 and optional fields" {
+    try initTestDb(std.testing.allocator);
+    defer deinit();
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    try execRaw("CREATE TEMP TABLE opt_test (bigval bigint, maybe text)");
+    defer execRaw("DROP TABLE IF EXISTS opt_test") catch {};
+
+    try execRaw("INSERT INTO opt_test VALUES (9000000000000, 'hello'), (42, NULL)");
+
+    const Row = struct {
+        bigval: i64,
+        maybe: ?[]const u8,
+    };
+
+    const rows = try query(Row, arena.allocator(), "SELECT bigval, maybe FROM opt_test ORDER BY bigval", .{});
+    try std.testing.expectEqual(2, rows.len);
+
+    try std.testing.expectEqual(@as(i64, 42), rows[0].bigval);
+    try std.testing.expect(rows[0].maybe == null);
+
+    try std.testing.expectEqual(@as(i64, 9000000000000), rows[1].bigval);
+    try std.testing.expectEqualStrings("hello", rows[1].maybe.?);
+}
+
+test "Config - defaults" {
+    const cfg = Config{
+        .host = "localhost",
+        .port = 5432,
+        .database = "mydb",
+        .user = "myuser",
+    };
+    try std.testing.expectEqualStrings("localhost", cfg.host);
+    try std.testing.expectEqual(@as(u16, 5432), cfg.port);
+    try std.testing.expectEqualStrings("mydb", cfg.database);
+    try std.testing.expectEqualStrings("myuser", cfg.user);
+    try std.testing.expectEqual(@as(usize, 10), cfg.pool_size);
+    try std.testing.expectEqual(@as(u64, 5000), cfg.timeout_ms);
+
+    const dbcfg = DbConfig{};
+    try std.testing.expect(dbcfg.host == null);
+    try std.testing.expect(dbcfg.port == null);
+    try std.testing.expect(dbcfg.database == null);
+    try std.testing.expect(dbcfg.user == null);
+    try std.testing.expect(dbcfg.password == null);
+    try std.testing.expect(dbcfg.pool_size == null);
+}
+
+test "init and deinit lifecycle" {
+    // init with explicit config, then deinit
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    var threaded = std.Io.Threaded.init_single_threaded;
+    const io = threaded.io();
+
+    try init(arena.allocator(), io, .{
+        .host = null,
+        .database = null,
+        .user = null,
+        .password = null,
+    });
+    defer deinit();
+
+    // verify pool is active by running a query
+    const result = try query(i32, arena.allocator(), "SELECT $1::integer", .{@as(i32, 77)});
+    try std.testing.expectEqual(77, result);
+}
+
+test "array parameter - ANY() query" {
+    try initTestDb(std.testing.allocator);
+    defer deinit();
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    try execRaw("CREATE TEMP TABLE any_test (id integer, name text)");
+    defer execRaw("DROP TABLE IF EXISTS any_test") catch {};
+
+    try execRaw("INSERT INTO any_test VALUES (1, 'one'), (2, 'two'), (3, 'three'), (4, 'four'), (5, 'five')");
+
+    const ids = &[_]i32{ 2, 4 };
+    const Row = struct { id: i32, name: []const u8 };
+    const rows = try query(Row, arena.allocator(),
+        "SELECT id, name FROM any_test WHERE id = ANY($1) ORDER BY id",
+        .{ids.*},
+    );
+    try std.testing.expectEqual(2, rows.len);
+    try std.testing.expectEqual(2, rows[0].id);
+    try std.testing.expectEqualStrings("two", rows[0].name);
+    try std.testing.expectEqual(4, rows[1].id);
+    try std.testing.expectEqualStrings("four", rows[1].name);
 }
