@@ -587,7 +587,7 @@ pub fn Server(comptime T: type) type {
             if (self.sse_hub) |*h| h.deinit();
             if (self.sse_threaded) |*t| t.deinit();
             self.interval_threads.deinit(std.heap.smp_allocator);
-            if (self._db) |db| db.deinit();
+            if (self._db) |db_ptr| db_ptr.deinit();
             _ = self.spider_gpa.deinit();
             self.spider_arena.deinit();
         }
