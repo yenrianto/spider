@@ -11,7 +11,6 @@ const MiddlewareFn = ctx_mod.MiddlewareFn;
 const ErrorHandler = ctx_mod.ErrorHandler;
 const ViewsConfig = ctx_mod.ViewsConfig;
 const Database = @import("database.zig").Database;
-const DriverType = @import("database.zig").DriverType;
 const Router = @import("../routing/router.zig").Router;
 const Handler = @import("../routing/router.zig").Handler;
 const Config = @import("../internal/config.zig").Config;
@@ -111,7 +110,6 @@ const WorkerCtx = struct {
     config: Config,
     error_handler: ?ErrorHandler,
     _db: ?*const Database,
-    _driver_type: DriverType,
     decorations: ?*const anyopaque,
     ws_route_hubs: []const WsRouteHub,
     sse_hub: ?*Hub,
@@ -130,7 +128,6 @@ const ConnCtx = struct {
     config: Config,
     error_handler: ?ErrorHandler,
     _db: ?*const Database,
-    _driver_type: DriverType,
     decorations: ?*const anyopaque,
     ws_route_hubs: []const WsRouteHub,
     sse_hub: ?*Hub,
@@ -158,7 +155,6 @@ fn workerLoop(wctx: WorkerCtx) void {
             .config = wctx.config,
             .error_handler = wctx.error_handler,
             ._db = wctx._db,
-            ._driver_type = wctx._driver_type,
             .decorations = wctx.decorations,
             .ws_route_hubs = wctx.ws_route_hubs,
             .sse_hub = wctx.sse_hub,
@@ -255,7 +251,6 @@ fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
                 .params = m.params,
                 .body = body,
                 ._db = ctx._db,
-                ._driver_type = ctx._driver_type,
                 ._views = views_cfg,
                 ._io = ctx.io,
                 ._stream = ctx.stream,
@@ -294,7 +289,6 @@ fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
                 .params = .{},
                 .body = body,
                 ._db = ctx._db,
-                ._driver_type = ctx._driver_type,
                 ._views = views_cfg,
                 ._io = ctx.io,
                 ._stream = ctx.stream,
@@ -546,7 +540,6 @@ pub fn Server(comptime T: type) type {
         route_middlewares: std.ArrayList(RouteMiddlewareEntry),
         error_handler: ?ErrorHandler = null,
         _db: ?Database = null,
-        _driver_type: DriverType = .postgresql,
         static_config: StaticConfig = .{ .dir = "./public", .prefix = "/" },
         config: Config = default_config,
         views_index: ?views_mod.ViewsIndex = null,
@@ -625,7 +618,6 @@ pub fn Server(comptime T: type) type {
 
         pub fn db(self: *Self, database: Database) *Self {
             self._db = database;
-            self._driver_type = database.driver_type;
             return self;
         }
 
@@ -806,7 +798,6 @@ pub fn Server(comptime T: type) type {
                 .config = self.config,
                 .error_handler = self.error_handler,
                 ._db = if (self._db) |*d| @as(*const Database, d) else null,
-                ._driver_type = self._driver_type,
                 .decorations = if (@sizeOf(T) == 0) null else @as(*const anyopaque, @ptrCast(&self.decorations)),
                 .ws_route_hubs = self.ws_route_hubs.items,
                 .sse_hub = if (self.sse_hub) |*h| h else null,

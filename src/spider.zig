@@ -24,7 +24,6 @@ pub const websocket = @import("ws/websocket.zig");
 pub const Hub = @import("ws/hub.zig").Hub;
 pub const Ws = @import("ws/ws.zig").Ws;
 pub const Sse = @import("ws/sse.zig").Sse;
-pub const mysql = @import("drivers/mysql/mysql.zig");
 pub const pg = @import("spider_pg");
 pub const auth = @import("modules/auth/auth.zig");
 pub const static = @import("modules/static.zig");
