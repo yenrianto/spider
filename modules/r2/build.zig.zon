@@ -1,0 +1,7 @@
+.{
+    .name = .spider_r2,
+    .version = "0.1.0",
+    .paths = .{""},
+    .fingerprint = 0x2ce68d078b348087,
+    .dependencies = .{},
+}

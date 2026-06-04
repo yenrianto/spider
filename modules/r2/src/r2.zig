@@ -1,6 +1,6 @@
 const std = @import("std");
 const pacman = @import("pacman");
-const Ctx = @import("../core/context.zig").Ctx;
+const Ctx = @import("spider").Ctx;
 
 const Sha256 = std.crypto.hash.sha2.Sha256;
 const HmacSha256 = std.crypto.auth.hmac.sha2.HmacSha256;
@@ -28,7 +28,7 @@ pub const R2 = struct {
     }
 
     pub fn initFromEnv() R2 {
-        const env = @import("../internal/env.zig");
+        const env = @import("spider").env;
         return init(.{
             .account_id = env.getOr("R2_ACCOUNT_ID", ""),
             .access_key = env.getOr("R2_ACCESS_KEY", ""),

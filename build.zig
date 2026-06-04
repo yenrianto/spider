@@ -4,6 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const with_pg = b.option(bool, "pg", "Enable PostgreSQL support") orelse false;
+    const with_r2 = b.option(bool, "r2", "Enable Cloudflare R2 support") orelse false;
 
     const pacman_dep = b.dependency("pacman", .{});
     const pg_dep = b.dependency("pg", .{ .target = target, .optimize = optimize });
@@ -27,6 +28,15 @@ pub fn build(b: *std.Build) void {
         const spider_pg = pg_module_dep.module("spider_pg");
         spider_pg.addImport("spider", mod);
         mod.addImport("spider_pg", spider_pg);
+    }
+
+    if (with_r2) {
+        if (b.lazyDependency("spider_r2", .{ .target = target, .optimize = optimize })) |dep| {
+            const spider_r2 = dep.module("spider_r2");
+            spider_r2.addImport("spider", mod);
+            spider_r2.addImport("pacman", pacman_dep.module("pacman"));
+            mod.addImport("spider_r2", spider_r2);
+        }
     }
 
     // Default spider_config fallback for projects without spider.config.zig

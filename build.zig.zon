@@ -15,6 +15,10 @@
             .path = "modules/pg",
             .lazy = true,
         },
+        .spider_r2 = .{
+            .path = "modules/r2",
+            .lazy = true,
+        },
     },
     .paths = .{
         "build.zig",
