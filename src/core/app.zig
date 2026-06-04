@@ -703,6 +703,20 @@ pub fn Server(comptime T: type) type {
             return self;
         }
 
+        pub fn sseInterval(self: *Self, ms: u64, comptime callback: fn (*Hub) void) *Self {
+            if (self.sse_hub == null) {
+                self.sse_threaded = std.Io.Threaded.init_single_threaded;
+                self.sse_hub = Hub.init(std.heap.smp_allocator, self.sse_threaded.?.io());
+            }
+            self.interval_threads.append(std.heap.smp_allocator, .{
+                .hub = if (self.sse_hub) |*h| h else unreachable,
+                .ms = ms,
+                .callback = callback,
+                .io = undefined,
+            }) catch {};
+            return self;
+        }
+
         pub fn sse(self: *Self, path: []const u8, comptime handler: fn (*Sse) anyerror!void) *Self {
             if (self.sse_hub == null) {
                 self.sse_threaded = std.Io.Threaded.init_single_threaded;
