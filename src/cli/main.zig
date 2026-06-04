@@ -40,12 +40,18 @@ pub fn main(init: std.process.Init) !void {
     if (std.mem.eql(u8, command, "new")) {
         var use_daisyui = false;
         var skip_downloads = false;
+        var api_only = false;
+        var no_db = false;
         var app_name_opt: ?[]const u8 = null;
         while (args.next()) |arg| {
             if (std.mem.eql(u8, arg, "--daisyui")) {
                 use_daisyui = true;
             } else if (std.mem.eql(u8, arg, "--skip-downloads")) {
                 skip_downloads = true;
+            } else if (std.mem.eql(u8, arg, "--api")) {
+                api_only = true;
+            } else if (std.mem.eql(u8, arg, "--no-db")) {
+                no_db = true;
             } else {
                 app_name_opt = arg;
             }
@@ -54,7 +60,7 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("error: missing app name\nUsage: spider new <app_name>\n", .{});
             return error.MissingAppName;
         };
-        try new.run(io, allocator, app_name, use_daisyui, skip_downloads);
+        try new.run(io, allocator, app_name, use_daisyui, skip_downloads, api_only, no_db);
     } else if (std.mem.eql(u8, command, "generate")) {
         const subcommand = args.next() orelse {
             std.debug.print("Usage: spider generate <subcommand>\n", .{});
