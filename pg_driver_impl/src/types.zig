@@ -1359,7 +1359,7 @@ pub fn bindValue(comptime T: type, oid: i32, value: anytype, buf: *buffer.Buffer
         },
         .pointer => |ptr| switch (ptr.size) {
             .slice => {
-                if (ptr.is_const) {
+                if (ptr.attrs.@"const") {
                     return bindSlice(oid, @as([]const ptr.child, value), buf, format_pos);
                 } else {
                     return bindSlice(oid, @as([]ptr.child, value), buf, format_pos);
