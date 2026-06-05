@@ -4,11 +4,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const spider_dep = b.dependency("spider", .{
-        .target = target,
-        .optimize = optimize,
-        .pg = true,
-    });
+    // TODO: add .pg = true when spider_modular is merged to main
+    const spider_dep = b.dependency("spider", .{ .target = target });
     const spider_mod = spider_dep.module("spider");
 
     // Register spider.config.zig
@@ -80,7 +77,7 @@ pub fn build(b: *std.Build) void {
 
     // Check if frontend assets are installed
     const has_assets = blk: {
-        std.fs.cwd().access("bin/tailwindcss", .{}) catch break :blk false;
+        std.Io.Dir.cwd().access(b.graph.io, "bin/tailwindcss", .{}) catch break :blk false;
         break :blk true;
     };
 

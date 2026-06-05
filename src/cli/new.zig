@@ -219,29 +219,39 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     }
 
     if (!effective_skip) {
-        current_step = "compile css";
-        var css_child = std.process.spawn(io, .{
-            .argv = &.{ "./bin/tailwindcss", "-i", "src/styles.css", "-o", "public/css/app.css" },
-            .cwd = .{ .path = app_name },
-        }) catch |err| {
-            fail_err = err;
-            return err;
+        // only compile CSS if tailwindcss is already installed
+        const tailwind_exists = blk: {
+            project_dir.access(io, "bin/tailwindcss", .{}) catch break :blk false;
+            break :blk true;
         };
-        const css_term = css_child.wait(io) catch |err| {
-            fail_err = err;
-            return err;
-        };
-        switch (css_term) {
-            .exited => |code| if (code != 0) {
-                fail_err = error.TailwindCompileFailed;
-                return error.TailwindCompileFailed;
-            },
-            else => {
-                fail_err = error.TailwindCompileFailed;
-                return error.TailwindCompileFailed;
-            },
+
+        if (tailwind_exists) {
+            current_step = "compile css";
+            var css_child = std.process.spawn(io, .{
+                .argv = &.{ "./bin/tailwindcss", "-i", "src/styles.css", "-o", "public/css/app.css" },
+                .cwd = .{ .path = app_name },
+            }) catch |err| {
+                fail_err = err;
+                return err;
+            };
+            const css_term = css_child.wait(io) catch |err| {
+                fail_err = err;
+                return err;
+            };
+            switch (css_term) {
+                .exited => |code| if (code != 0) {
+                    fail_err = error.TailwindCompileFailed;
+                    return error.TailwindCompileFailed;
+                },
+                else => {
+                    fail_err = error.TailwindCompileFailed;
+                    return error.TailwindCompileFailed;
+                },
+            }
+            std.debug.print("  CSS compiled → public/css/app.css\n", .{});
+        } else {
+            std.debug.print("  CSS will be compiled on first 'zig build run'\n", .{});
         }
-        std.debug.print("  CSS compiled → public/css/app.css\n", .{});
     }
 
     current_step = "fetch spider";
@@ -253,7 +263,8 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
 
     std.debug.print("\nDone! Next steps:\n", .{});
     std.debug.print("  cd {s}\n", .{app_name});
-    std.debug.print("  zig build run   (downloads assets automatically on first run)\n", .{});
+    std.debug.print("  zig build run        ← downloads assets and starts server automatically\n", .{});
+    std.debug.print("                         (requires spider CLI in PATH — run: spider install)\n", .{});
 
     if (effective_skip) {
         std.debug.print("\nwarning: assets not downloaded, run `spider install` to download them.\n", .{});

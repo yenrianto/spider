@@ -76,7 +76,7 @@ pub fn build(b: *std.Build) void {
 
     // Check if frontend assets are installed
     const has_assets = blk: {
-        std.fs.cwd().access("bin/tailwindcss", .{}) catch break :blk false;
+        std.Io.Dir.cwd().access(b.graph.io, "bin/tailwindcss", .{}) catch break :blk false;
         break :blk true;
     };
 

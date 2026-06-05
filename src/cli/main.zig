@@ -11,16 +11,19 @@ const usage =
     \\Spider CLI — spiderme.org
     \\
     \\Usage:
-    \\  spider new <app_name> [--daisyui] [--skip-downloads]
+    \\  spider new <app_name> [--daisyui] [--skip-downloads] [--api] [--no-db]
     \\                                 Create a new Spider project
     \\    --daisyui                    Include DaisyUI preset
     \\    --skip-downloads             Skip binary downloads (tailwindcss, alpine, htmx, icons)
+    \\    --api                        API-only project (no HTML views)
+    \\    --no-db                      Skip database setup
     \\  spider generate <subcommand>   Generate code (aliases: g)
     \\  spider g <subcommand>          Alias for generate
     \\    feature <name>                Generate a new feature
     \\    auth [--provider=keycloak|google]  Generate auth feature
     \\  spider generate-vapid           Generate VAPID keys for Web Push
     \\  spider migrate                 Run pending database migrations
+    \\  spider install                 Download frontend assets (tailwindcss, alpine, htmx, icons)
     \\  spider version                 Show CLI version
     \\  spider help                    Show this help
     \\

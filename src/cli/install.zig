@@ -12,32 +12,40 @@ fn getTailwindUrl() []const u8 {
     return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64";
 }
 
+fn downloadIfMissing(io: std.Io, allocator: std.mem.Allocator, url: []const u8, project_dir: std.Io.Dir, dest: []const u8) !void {
+    project_dir.access(io, dest, .{}) catch {
+        try downloader.download(io, allocator, url, project_dir, dest);
+        return;
+    };
+    std.debug.print("  already installed: {s}\n", .{dest});
+}
+
 pub fn run(io: std.Io, allocator: std.mem.Allocator, project_dir: std.Io.Dir) !void {
     std.debug.print("Downloading frontend assets...\n", .{});
 
-    downloader.download(io, allocator, getTailwindUrl(), project_dir, "bin/tailwindcss") catch |err| {
+    downloadIfMissing(io, allocator, getTailwindUrl(), project_dir, "bin/tailwindcss") catch |err| {
         std.debug.print("  warning: tailwindcss download failed: {s}\n", .{@errorName(err)});
     };
 
-    downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.mjs", project_dir, "bin/daisyui.mjs") catch |err| {
+    downloadIfMissing(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.mjs", project_dir, "bin/daisyui.mjs") catch |err| {
         std.debug.print("  warning: daisyui download failed: {s}\n", .{@errorName(err)});
     };
-    downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.mjs", project_dir, "bin/daisyui-theme.mjs") catch |err| {
+    downloadIfMissing(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.mjs", project_dir, "bin/daisyui-theme.mjs") catch |err| {
         std.debug.print("  warning: daisyui-theme download failed: {s}\n", .{@errorName(err)});
     };
 
-    downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/alpinejs@latest/dist/cdn.min.js", project_dir, "public/js/alpine.min.js") catch |err| {
+    downloadIfMissing(io, allocator, "https://cdn.jsdelivr.net/npm/alpinejs@latest/dist/cdn.min.js", project_dir, "public/js/alpine.min.js") catch |err| {
         std.debug.print("  warning: alpine download failed: {s}\n", .{@errorName(err)});
     };
 
-    downloader.download(io, allocator, "https://unpkg.com/htmx.org@latest/dist/htmx.min.js", project_dir, "public/js/htmx.min.js") catch |err| {
+    downloadIfMissing(io, allocator, "https://unpkg.com/htmx.org@latest/dist/htmx.min.js", project_dir, "public/js/htmx.min.js") catch |err| {
         std.debug.print("  warning: htmx download failed: {s}\n", .{@errorName(err)});
     };
 
-    downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css", project_dir, "public/css/tabler-icons.min.css") catch |err| {
+    downloadIfMissing(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css", project_dir, "public/css/tabler-icons.min.css") catch |err| {
         std.debug.print("  warning: tabler-icons css download failed: {s}\n", .{@errorName(err)});
     };
-    downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/fonts/tabler-icons.woff2", project_dir, "public/fonts/tabler-icons.woff2") catch |err| {
+    downloadIfMissing(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/fonts/tabler-icons.woff2", project_dir, "public/fonts/tabler-icons.woff2") catch |err| {
         std.debug.print("  warning: tabler-icons font download failed: {s}\n", .{@errorName(err)});
     };
 
