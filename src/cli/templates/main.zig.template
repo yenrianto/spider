@@ -3,6 +3,7 @@ const spider = @import("spider");
 const features = @import("features");
 const Response = spider.Response;
 const home = features.home;
+const migrations = @import("core/db/migrations.zig");
 // const db = spider.pg;
 
 pub const spider_templates = @import("embedded_templates.zig").EmbeddedTemplates;
@@ -10,8 +11,16 @@ pub const spider_templates = @import("embedded_templates.zig").EmbeddedTemplates
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
     const io = init.io;
-    _ = allocator;
-    _ = io;
+
+    // Subcommands: ./myapp migrate
+    var args = init.args();
+    _ = args.next(); // skip executable
+    if (args.next()) |cmd| {
+        if (std.mem.eql(u8, cmd, "migrate")) {
+            try migrations.run(allocator, io);
+            return;
+        }
+    }
 
     // Uncomment to enable PostgreSQL (reads from .env automatically)
     // try db.init(allocator, io, .{});
