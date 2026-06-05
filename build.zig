@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const with_pg = b.option(bool, "pg", "Enable PostgreSQL support") orelse false;
     const with_r2 = b.option(bool, "r2", "Enable Cloudflare R2 support") orelse false;
+    const with_sqlite = b.option(bool, "sqlite", "Enable SQLite support") orelse false;
 
     const pacman_dep = b.dependency("pacman", .{});
     const pg_dep = b.dependency("pg", .{ .target = target, .optimize = optimize });
@@ -28,6 +29,14 @@ pub fn build(b: *std.Build) void {
         const spider_pg = pg_module_dep.module("spider_pg");
         spider_pg.addImport("spider", mod);
         mod.addImport("spider_pg", spider_pg);
+    }
+
+    if (with_sqlite) {
+        if (b.lazyDependency("spider_sqlite", .{ .target = target, .optimize = optimize })) |dep| {
+            const spider_sqlite = dep.module("spider_sqlite");
+            spider_sqlite.addImport("spider", mod);
+            mod.addImport("spider_sqlite", spider_sqlite);
+        }
     }
 
     if (with_r2) {

@@ -19,6 +19,10 @@
             .path = "modules/r2",
             .lazy = true,
         },
+        .spider_sqlite = .{
+            .path = "modules/sqlite",
+            .lazy = true,
+        },
     },
     .paths = .{
         "build.zig",
