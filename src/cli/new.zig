@@ -1,6 +1,4 @@
 const std = @import("std");
-const downloader = @import("downloader.zig");
-const chmod = @import("chmod.zig");
 
 // Embedded templates
 const build_zig_tmpl = @embedFile("templates/build.zig.template");
@@ -30,16 +28,6 @@ const home_daisyui_index_tmpl = @embedFile("templates/home_daisyui_index.html.te
 const build_zig_pg_tmpl = @embedFile("templates/build.zig.pg.template");
 const main_zig_pg_tmpl = @embedFile("templates/main.zig.pg.template");
 const migrations_zig_tmpl = @embedFile("templates/migrations.zig.template");
-
-fn getTailwindUrl() []const u8 {
-    const os = @import("builtin").os.tag;
-    const arch = @import("builtin").cpu.arch;
-    if (os == .windows) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-windows-x64.exe";
-    if (os == .macos and arch == .aarch64) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-macos-arm64";
-    if (os == .macos) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-macos-x64";
-    if (arch == .aarch64) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-arm64";
-    return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64";
-}
 
 fn runZigFetch(io: std.Io, app_name: []const u8) !void {
     var child = try std.process.spawn(io, .{
@@ -145,56 +133,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     project_dir.createDirPath(io, "public/fonts") catch {};
 
     if (!effective_skip) {
-        if (!api_only) {
-            current_step = "download tailwindcss";
-        downloader.download(io, allocator, getTailwindUrl(), project_dir, "bin/tailwindcss") catch |err| {
-            fail_err = err;
-            return err;
-        };
-
-        current_step = "download daisyui";
-        downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.mjs", project_dir, "bin/daisyui.mjs") catch |err| {
-            fail_err = err;
-            return err;
-        };
-        downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.mjs", project_dir, "bin/daisyui-theme.mjs") catch |err| {
-            fail_err = err;
-            return err;
-        };
-
-        current_step = "download alpine";
-        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/alpinejs@latest/dist/cdn.min.js", project_dir, "public/js/alpine.min.js") catch |err| {
-            fail_err = err;
-            return err;
-        };
-
-        current_step = "download htmx";
-        downloader.download(io, allocator, "https://unpkg.com/htmx.org@latest/dist/htmx.min.js", project_dir, "public/js/htmx.min.js") catch |err| {
-            fail_err = err;
-            return err;
-        };
-
-        current_step = "download icons";
-        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css", project_dir, "public/css/tabler-icons.min.css") catch |err| {
-            fail_err = err;
-            return err;
-        };
-        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/fonts/tabler-icons.woff2", project_dir, "public/fonts/tabler-icons.woff2") catch |err| {
-            fail_err = err;
-            return err;
-        };
-
-        current_step = "chmod tailwindcss";
-        const tailwind_path = std.fmt.allocPrint(allocator, "{s}/bin/tailwindcss", .{app_name}) catch |err| {
-            fail_err = err;
-            return err;
-        };
-        defer allocator.free(tailwind_path);
-        chmod.makeExecutable(io, tailwind_path) catch |err| {
-            fail_err = err;
-            return err;
-        };
-        }
+        std.debug.print("  Run 'spider install' to download frontend assets\n", .{});
     }
 
     current_step = "read fingerprint";
@@ -314,9 +253,9 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
 
     std.debug.print("\nDone! Next steps:\n", .{});
     std.debug.print("  cd {s}\n", .{app_name});
-    std.debug.print("  zig build run\n", .{});
+    std.debug.print("  zig build run   (downloads assets automatically on first run)\n", .{});
 
     if (effective_skip) {
-        std.debug.print("\nwarning: downloads skipped, run `spider fetch-deps` to download missing binaries.\n", .{});
+        std.debug.print("\nwarning: assets not downloaded, run `spider install` to download them.\n", .{});
     }
 }

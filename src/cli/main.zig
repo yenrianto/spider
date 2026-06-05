@@ -2,6 +2,7 @@ const std = @import("std");
 const new = @import("new.zig");
 const generate = @import("generate.zig");
 const migrate = @import("migrate.zig");
+const install = @import("install.zig");
 const generate_vapid = @import("generate_vapid.zig");
 
 const version = "0.6.3";
@@ -78,6 +79,8 @@ pub fn main(init: std.process.Init) !void {
         try generate.run(io, allocator, subcommand, &args);
     } else if (std.mem.eql(u8, command, "migrate")) {
         try migrate.run(io, allocator);
+    } else if (std.mem.eql(u8, command, "install")) {
+        try install.run(io, allocator, std.Io.Dir.cwd());
     } else if (std.mem.eql(u8, command, "generate-vapid")) {
         const subject = args.next();
         try generate_vapid.run(io, allocator, subject);
