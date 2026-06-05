@@ -23,6 +23,9 @@
             .path = "modules/sqlite",
             .lazy = true,
         },
+        .zqlite = .{
+            .path = "modules/sqlite/sqlite_driver_impl",
+        },
     },
     .paths = .{
         "build.zig",

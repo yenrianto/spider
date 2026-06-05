@@ -19,4 +19,19 @@ pub fn build(b: *std.Build) void {
         },
     });
     _ = spider_sqlite;
+
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/sqlite.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+        .imports = &.{
+            .{ .name = "zqlite", .module = zqlite_lib },
+        },
+    });
+    const tests = b.addTest(.{ .root_module = test_mod });
+
+    const run_tests = b.addRunArtifact(tests);
+    const test_step = b.step("test", "Run spider-sqlite tests");
+    test_step.dependOn(&run_tests.step);
 }
