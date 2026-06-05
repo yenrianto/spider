@@ -7,12 +7,13 @@ fn setEnvVarNative(name: [*:0]const u8, value: [*:0]const u8, overwrite: bool) v
             extern fn _putenv_s(name: [*:0]const u8, value: [*:0]const u8) c_int;
         }._putenv_s;
         _ = _putenv_s(name, value);
-    } else {
+    } else if (builtin.link_libc) {
         const setenv = struct {
             extern fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
         }.setenv;
         _ = setenv(name, value, @intFromBool(overwrite));
     }
+    // Without libc, runtime .env loading is unavailable.
 }
 
 pub fn get(key: []const u8) ?[]const u8 {

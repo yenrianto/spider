@@ -3,7 +3,6 @@ const template_mod = @import("../render/template.zig");
 const Template = template_mod.Template;
 const views_mod = @import("../render/views.zig");
 const Database = @import("database.zig").Database;
-const DriverType = @import("database.zig").DriverType;
 pub const DatabaseCtx = @import("database.zig").DatabaseCtx;
 const zmd = @import("../render/zmd/zmd.zig");
 const Hub = @import("../ws/hub.zig").Hub;
@@ -56,7 +55,6 @@ pub const Ctx = struct {
     params: std.StringHashMapUnmanaged([]const u8),
     body: ?[]const u8 = null,
     _db: ?*const Database = null,
-    _driver_type: DriverType = .postgresql,
     _views: ?ViewsConfig = null,
     _io: std.Io = undefined,
     _stream: std.Io.net.Stream = undefined,
@@ -70,7 +68,6 @@ pub const Ctx = struct {
         return .{
             ._db = self._db.?,
             ._arena = self.arena,
-            ._driver_type = self._driver_type,
         };
     }
 

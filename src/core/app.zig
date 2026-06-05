@@ -11,7 +11,6 @@ const MiddlewareFn = ctx_mod.MiddlewareFn;
 const ErrorHandler = ctx_mod.ErrorHandler;
 const ViewsConfig = ctx_mod.ViewsConfig;
 const Database = @import("database.zig").Database;
-const DriverType = @import("database.zig").DriverType;
 const Router = @import("../routing/router.zig").Router;
 const Handler = @import("../routing/router.zig").Handler;
 const Config = @import("../internal/config.zig").Config;
@@ -111,7 +110,6 @@ const WorkerCtx = struct {
     config: Config,
     error_handler: ?ErrorHandler,
     _db: ?*const Database,
-    _driver_type: DriverType,
     decorations: ?*const anyopaque,
     ws_route_hubs: []const WsRouteHub,
     sse_hub: ?*Hub,
@@ -130,7 +128,6 @@ const ConnCtx = struct {
     config: Config,
     error_handler: ?ErrorHandler,
     _db: ?*const Database,
-    _driver_type: DriverType,
     decorations: ?*const anyopaque,
     ws_route_hubs: []const WsRouteHub,
     sse_hub: ?*Hub,
@@ -158,7 +155,6 @@ fn workerLoop(wctx: WorkerCtx) void {
             .config = wctx.config,
             .error_handler = wctx.error_handler,
             ._db = wctx._db,
-            ._driver_type = wctx._driver_type,
             .decorations = wctx.decorations,
             .ws_route_hubs = wctx.ws_route_hubs,
             .sse_hub = wctx.sse_hub,
@@ -255,7 +251,6 @@ fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
                 .params = m.params,
                 .body = body,
                 ._db = ctx._db,
-                ._driver_type = ctx._driver_type,
                 ._views = views_cfg,
                 ._io = ctx.io,
                 ._stream = ctx.stream,
@@ -294,7 +289,6 @@ fn handleConnection(ctx: ConnCtx) error{Canceled}!void {
                 .params = .{},
                 .body = body,
                 ._db = ctx._db,
-                ._driver_type = ctx._driver_type,
                 ._views = views_cfg,
                 ._io = ctx.io,
                 ._stream = ctx.stream,
@@ -512,16 +506,20 @@ const IntervalEntry = struct {
     ms: u64,
     callback: *const fn (*Hub) void,
     io: std.Io,
+    running: std.atomic.Value(bool) = std.atomic.Value(bool).init(true),
+    thread: ?std.Thread = null,
 };
 
-fn intervalLoop(entry: IntervalEntry) void {
-    while (true) {
+fn intervalLoop(entry: *IntervalEntry) void {
+    while (entry.running.load(.acquire)) {
         std.Io.sleep(
             entry.io,
             std.Io.Duration.fromMilliseconds(@as(i64, @intCast(entry.ms))),
             .real,
         ) catch {};
-        entry.callback(entry.hub);
+        if (entry.running.load(.acquire)) {
+            entry.callback(entry.hub);
+        }
     }
 }
 
@@ -542,7 +540,6 @@ pub fn Server(comptime T: type) type {
         route_middlewares: std.ArrayList(RouteMiddlewareEntry),
         error_handler: ?ErrorHandler = null,
         _db: ?Database = null,
-        _driver_type: DriverType = .postgresql,
         static_config: StaticConfig = .{ .dir = "./public", .prefix = "/" },
         config: Config = default_config,
         views_index: ?views_mod.ViewsIndex = null,
@@ -575,16 +572,25 @@ pub fn Server(comptime T: type) type {
         }
 
         pub fn deinit(self: *Self) void {
+            for (self.interval_threads.items) |*e| {
+                e.running.store(false, .release);
+            }
+            for (self.interval_threads.items) |*e| {
+                if (e.thread) |t| t.join();
+            }
             if (self.views_index) |*idx| idx.deinit();
             self.route_middlewares.deinit(std.heap.page_allocator);
             self.router.deinit();
             for (self.ws_route_hubs.items) |*rh| {
+                rh.threaded.deinit();
                 rh.hub.deinit();
                 std.heap.smp_allocator.destroy(rh.hub);
             }
             self.ws_route_hubs.deinit(std.heap.smp_allocator);
             if (self.sse_hub) |*h| h.deinit();
+            if (self.sse_threaded) |*t| t.deinit();
             self.interval_threads.deinit(std.heap.smp_allocator);
+            if (self._db) |db_ptr| db_ptr.deinit();
             _ = self.spider_gpa.deinit();
             self.spider_arena.deinit();
         }
@@ -612,7 +618,6 @@ pub fn Server(comptime T: type) type {
 
         pub fn db(self: *Self, database: Database) *Self {
             self._db = database;
-            self._driver_type = database.driver_type;
             return self;
         }
 
@@ -700,6 +705,20 @@ pub fn Server(comptime T: type) type {
             return self;
         }
 
+        pub fn sseInterval(self: *Self, ms: u64, comptime callback: fn (*Hub) void) *Self {
+            if (self.sse_hub == null) {
+                self.sse_threaded = std.Io.Threaded.init_single_threaded;
+                self.sse_hub = Hub.init(std.heap.smp_allocator, self.sse_threaded.?.io());
+            }
+            self.interval_threads.append(std.heap.smp_allocator, .{
+                .hub = if (self.sse_hub) |*h| h else unreachable,
+                .ms = ms,
+                .callback = callback,
+                .io = undefined,
+            }) catch {};
+            return self;
+        }
+
         pub fn sse(self: *Self, path: []const u8, comptime handler: fn (*Sse) anyerror!void) *Self {
             if (self.sse_hub == null) {
                 self.sse_threaded = std.Io.Threaded.init_single_threaded;
@@ -759,8 +778,7 @@ pub fn Server(comptime T: type) type {
 
             for (self.interval_threads.items) |*entry| {
                 entry.io = io;
-                const t = std.Thread.spawn(.{}, intervalLoop, .{entry.*}) catch continue;
-                t.detach();
+                entry.thread = std.Thread.spawn(.{}, intervalLoop, .{entry}) catch continue;
             }
 
             const cpu_count = std.Thread.getCpuCount() catch 2;
@@ -780,7 +798,6 @@ pub fn Server(comptime T: type) type {
                 .config = self.config,
                 .error_handler = self.error_handler,
                 ._db = if (self._db) |*d| @as(*const Database, d) else null,
-                ._driver_type = self._driver_type,
                 .decorations = if (@sizeOf(T) == 0) null else @as(*const anyopaque, @ptrCast(&self.decorations)),
                 .ws_route_hubs = self.ws_route_hubs.items,
                 .sse_hub = if (self.sse_hub) |*h| h else null,
@@ -826,6 +843,7 @@ pub fn app(decorations: anytype) AppType(@TypeOf(decorations)) {
     s.decorations = decorations;
     s.config = cfg;
     var threaded = std.Io.Threaded.init_single_threaded;
+    defer threaded.deinit();
     const io = threaded.io();
     const views_dir = cfg.views_dir orelse "src";
     s.views_index = views_mod.buildIndex(io, std.heap.smp_allocator, views_dir) catch null;
@@ -846,6 +864,7 @@ pub fn appWithConfig(config: Config) Server(EmptyDeco) {
     var s = Server(EmptyDeco).init();
     s.config = config;
     var threaded = std.Io.Threaded.init_single_threaded;
+    defer threaded.deinit();
     const io = threaded.io();
     const views_dir = config.views_dir orelse "src";
     s.views_index = views_mod.buildIndex(io, std.heap.smp_allocator, views_dir) catch null;

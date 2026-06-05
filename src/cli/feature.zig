@@ -8,12 +8,15 @@ const routes_updater = @import("routes_updater.zig");
 // Embedded templates
 const mod_tmpl = @embedFile("templates/feature/mod.zig.template");
 const model_tmpl = @embedFile("templates/feature/model.zig.template");
-const repository_tmpl = @embedFile("templates/feature/repository.zig.template");
+const repository_sqlite_tmpl = @embedFile("templates/feature/repository.zig.template");
+const repository_pg_tmpl = @embedFile("templates/feature/repository.zig.pg.template");
 const presenter_tmpl = @embedFile("templates/feature/presenter.zig.template");
 const controller_tmpl = @embedFile("templates/feature/controller.zig.template");
 const index_html_tmpl = @embedFile("templates/feature/index.html.template");
-const migration_sql_tmpl = @embedFile("templates/feature/migration.sql.template");
-const migrations_zig_tmpl = @embedFile("templates/migrations.zig.template");
+const migration_sql_sqlite_tmpl = @embedFile("templates/feature/migration.sql.sqlite.template");
+const migration_sql_pg_tmpl = @embedFile("templates/feature/migration.sql.pg.template");
+const migrations_zig_sqlite_tmpl = @embedFile("templates/migrations.zig.sqlite.template");
+const migrations_zig_pg_tmpl = @embedFile("templates/migrations.zig.pg.template");
 
 pub fn run(io: std.Io, allocator: std.mem.Allocator, feature: []const u8) !void {
     const root_dir = try fs_utils.findProjectRoot(io);
@@ -32,7 +35,22 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, feature: []const u8) !void 
     const model_content = try template_engine.renderTemplate(allocator, model_tmpl, feature, plural);
     defer allocator.free(model_content);
 
-    const repository_content = try template_engine.renderTemplate(allocator, repository_tmpl, feature, plural);
+    const db_module = detectDbModule(io, allocator, root_dir) catch |err| blk: {
+        std.debug.print("warning: could not detect database module, defaulting to sqlite: {}\n", .{err});
+        break :blk try allocator.dupe(u8, "sqlite");
+    };
+    defer allocator.free(db_module);
+
+    const repo_feature = try template_engine.capitalize(allocator, feature);
+    defer allocator.free(repo_feature);
+
+    const repository_tmpl = if (std.mem.eql(u8, db_module, "pg")) repository_pg_tmpl else repository_sqlite_tmpl;
+    const repository_content = try template_engine.renderTemplateWithVars(allocator, repository_tmpl, &.{
+        .{ "{{feature}}", feature },
+        .{ "{{Feature}}", repo_feature },
+        .{ "{{plural}}", plural },
+        .{ "{{db_module}}", db_module },
+    });
     defer allocator.free(repository_content);
 
     const presenter_content = try template_engine.renderTemplate(allocator, presenter_tmpl, feature, plural);
@@ -48,6 +66,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, feature: []const u8) !void 
     const migration_name = try std.fmt.allocPrint(allocator, "{d}_create_{s}.sql", .{ timestamp, plural });
     defer allocator.free(migration_name);
 
+    const migration_sql_tmpl = if (std.mem.eql(u8, db_module, "pg")) migration_sql_pg_tmpl else migration_sql_sqlite_tmpl;
     const migration_content = try template_engine.renderTemplate(allocator, migration_sql_tmpl, feature, plural);
     defer allocator.free(migration_content);
 
@@ -93,6 +112,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, feature: []const u8) !void 
     try fs_utils.writeFile(io, root_dir, migration_path, migration_content);
     std.debug.print("  create  {s}\n", .{migration_path});
 
+    const migrations_zig_tmpl = if (std.mem.eql(u8, db_module, "pg")) migrations_zig_pg_tmpl else migrations_zig_sqlite_tmpl;
     try migration_updater.updateMigrationsZig(io, allocator, root_dir, timestamp, plural, migrations_zig_tmpl);
     std.debug.print("  update  src/core/db/migrations.zig\n", .{});
 
@@ -103,4 +123,16 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, feature: []const u8) !void 
     std.debug.print("  update  src/main.zig\n", .{});
 
     std.debug.print("\nDone!\n", .{});
+}
+
+fn detectDbModule(io: std.Io, allocator: std.mem.Allocator, root_dir: std.Io.Dir) ![]const u8 {
+    const main_content = root_dir.readFileAlloc(io, "src/main.zig", allocator, .limited(32 * 1024)) catch {
+        return allocator.dupe(u8, "sqlite");
+    };
+    defer allocator.free(main_content);
+
+    if (std.mem.indexOf(u8, main_content, "spider.pg") != null) {
+        return allocator.dupe(u8, "pg");
+    }
+    return allocator.dupe(u8, "sqlite");
 }

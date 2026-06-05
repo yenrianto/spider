@@ -1,6 +1,4 @@
 const std = @import("std");
-const downloader = @import("downloader.zig");
-const chmod = @import("chmod.zig");
 
 // Embedded templates
 const build_zig_tmpl = @embedFile("templates/build.zig.template");
@@ -27,16 +25,12 @@ const favicon_png = @embedFile("assets/favicon.png");
 const favicon_ico = @embedFile("assets/favicon.ico");
 const layout_daisyui_html_tmpl = @embedFile("templates/layout_daisyui.html.template");
 const home_daisyui_index_tmpl = @embedFile("templates/home_daisyui_index.html.template");
-
-fn getTailwindUrl() []const u8 {
-    const os = @import("builtin").os.tag;
-    const arch = @import("builtin").cpu.arch;
-    if (os == .windows) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-windows-x64.exe";
-    if (os == .macos and arch == .aarch64) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-macos-arm64";
-    if (os == .macos) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-macos-x64";
-    if (arch == .aarch64) return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-arm64";
-    return "https://github.com/tailwindlabs/tailwindcss/releases/latest/download/tailwindcss-linux-x64";
-}
+const build_zig_pg_tmpl = @embedFile("templates/build.zig.pg.template");
+const build_zig_sqlite_tmpl = @embedFile("templates/build.zig.sqlite.template");
+const main_zig_pg_tmpl = @embedFile("templates/main.zig.pg.template");
+const main_zig_sqlite_tmpl = @embedFile("templates/main.zig.sqlite.template");
+const migrations_zig_sqlite_tmpl = @embedFile("templates/migrations.zig.sqlite.template");
+const migrations_zig_pg_tmpl = @embedFile("templates/migrations.zig.pg.template");
 
 fn runZigFetch(io: std.Io, app_name: []const u8) !void {
     var child = try std.process.spawn(io, .{
@@ -80,10 +74,12 @@ fn readFingerprint(io: std.Io, allocator: std.mem.Allocator, dir: std.Io.Dir) ![
     return extractFingerprint(allocator, content);
 }
 
-fn render(allocator: std.mem.Allocator, tmpl: []const u8, app_name: []const u8, fingerprint: []const u8) ![]const u8 {
+fn render(allocator: std.mem.Allocator, tmpl: []const u8, app_name: []const u8, fingerprint: []const u8, db_module: []const u8) ![]const u8 {
     const step1 = try std.mem.replaceOwned(u8, allocator, tmpl, "{{app_name}}", app_name);
     defer allocator.free(step1);
-    return std.mem.replaceOwned(u8, allocator, step1, "{{fingerprint}}", fingerprint);
+    const step2 = try std.mem.replaceOwned(u8, allocator, step1, "{{fingerprint}}", fingerprint);
+    defer allocator.free(step2);
+    return std.mem.replaceOwned(u8, allocator, step2, "{{db_module}}", db_module);
 }
 
 fn writeFile(io: std.Io, dir: std.Io.Dir, path: []const u8, content: []const u8) !void {
@@ -98,7 +94,11 @@ fn writeFile(io: std.Io, dir: std.Io.Dir, path: []const u8, content: []const u8)
     try writer.interface.flush();
 }
 
-pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_daisyui: bool, skip_downloads: bool) !void {
+pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_daisyui: bool, skip_downloads: bool, api_only: bool, no_db: bool, use_pg: bool) !void {
+    // --api implies no database and no asset downloads
+    const effective_no_db = no_db or api_only;
+    const effective_skip = skip_downloads or api_only;
+
     const cwd = std.Io.Dir.cwd();
 
     cwd.createDir(io, app_name, .default_dir) catch |err| {
@@ -137,55 +137,8 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     project_dir.createDirPath(io, "public/css") catch {};
     project_dir.createDirPath(io, "public/fonts") catch {};
 
-    if (!skip_downloads) {
-        current_step = "download tailwindcss";
-        downloader.download(io, allocator, getTailwindUrl(), project_dir, "bin/tailwindcss") catch |err| {
-            fail_err = err;
-            return err;
-        };
-
-        current_step = "download daisyui";
-        downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.mjs", project_dir, "bin/daisyui.mjs") catch |err| {
-            fail_err = err;
-            return err;
-        };
-        downloader.download(io, allocator, "https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.mjs", project_dir, "bin/daisyui-theme.mjs") catch |err| {
-            fail_err = err;
-            return err;
-        };
-
-        current_step = "download alpine";
-        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/alpinejs@latest/dist/cdn.min.js", project_dir, "public/js/alpine.min.js") catch |err| {
-            fail_err = err;
-            return err;
-        };
-
-        current_step = "download htmx";
-        downloader.download(io, allocator, "https://unpkg.com/htmx.org@latest/dist/htmx.min.js", project_dir, "public/js/htmx.min.js") catch |err| {
-            fail_err = err;
-            return err;
-        };
-
-        current_step = "download icons";
-        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css", project_dir, "public/css/tabler-icons.min.css") catch |err| {
-            fail_err = err;
-            return err;
-        };
-        downloader.download(io, allocator, "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/fonts/tabler-icons.woff2", project_dir, "public/fonts/tabler-icons.woff2") catch |err| {
-            fail_err = err;
-            return err;
-        };
-
-        current_step = "chmod tailwindcss";
-        const tailwind_path = std.fmt.allocPrint(allocator, "{s}/bin/tailwindcss", .{app_name}) catch |err| {
-            fail_err = err;
-            return err;
-        };
-        defer allocator.free(tailwind_path);
-        chmod.makeExecutable(io, tailwind_path) catch |err| {
-            fail_err = err;
-            return err;
-        };
+    if (!effective_skip) {
+        std.debug.print("  Run 'spider install' to download frontend assets\n", .{});
     }
 
     current_step = "read fingerprint";
@@ -199,12 +152,14 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
 
     const selected_layout_tmpl = if (use_daisyui) layout_daisyui_html_tmpl else layout_html_tmpl;
     const selected_home_index_tmpl = if (use_daisyui) home_daisyui_index_tmpl else home_index_tmpl;
+    const selected_build_zig_tmpl = if (effective_no_db) build_zig_tmpl else if (use_pg) build_zig_pg_tmpl else build_zig_sqlite_tmpl;
+    const selected_main_zig_tmpl = if (effective_no_db) main_zig_tmpl else if (use_pg) main_zig_pg_tmpl else main_zig_sqlite_tmpl;
 
     const files = .{
-        .{ "build.zig", build_zig_tmpl },
+        .{ "build.zig", selected_build_zig_tmpl },
         .{ "build.zig.zon", build_zon_tmpl },
         .{ "spider.config.zig", spider_config_tmpl },
-        .{ "src/main.zig", main_zig_tmpl },
+        .{ "src/main.zig", selected_main_zig_tmpl },
         .{ "src/styles.css", styles_css_tmpl },
         .{ "src/embedded_templates.zig", "// Generated file - DO NOT EDIT MANUALLY\npub const EmbeddedTemplates = struct {};\n" },
         .{ "src/core/mod.zig", core_mod_tmpl },
@@ -233,7 +188,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     inline for (files) |f| {
         const path = f[0];
         const tmpl = f[1];
-        const content = render(allocator, tmpl, app_name, fingerprint) catch |err| {
+        const content = render(allocator, tmpl, app_name, fingerprint, "") catch |err| {
             fail_err = err;
             return err;
         };
@@ -255,30 +210,55 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
         std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
     }
 
-    if (!skip_downloads) {
-        current_step = "compile css";
-        var css_child = std.process.spawn(io, .{
-            .argv = &.{ "./bin/tailwindcss", "-i", "src/styles.css", "-o", "public/css/app.css" },
-            .cwd = .{ .path = app_name },
-        }) catch |err| {
+    if (!effective_no_db) {
+        const db_module = if (use_pg) "pg" else "sqlite";
+        const selected_migrations_tmpl = if (use_pg) migrations_zig_pg_tmpl else migrations_zig_sqlite_tmpl;
+        const migrations_content = render(allocator, selected_migrations_tmpl, app_name, fingerprint, db_module) catch |err| {
             fail_err = err;
             return err;
         };
-        const css_term = css_child.wait(io) catch |err| {
+        defer allocator.free(migrations_content);
+        writeFile(io, project_dir, "src/core/db/migrations.zig", migrations_content) catch |err| {
             fail_err = err;
             return err;
         };
-        switch (css_term) {
-            .exited => |code| if (code != 0) {
-                fail_err = error.TailwindCompileFailed;
-                return error.TailwindCompileFailed;
-            },
-            else => {
-                fail_err = error.TailwindCompileFailed;
-                return error.TailwindCompileFailed;
-            },
+        std.debug.print("  create  {s}/src/core/db/migrations.zig\n", .{app_name});
+    }
+
+    if (!effective_skip) {
+        // only compile CSS if tailwindcss is already installed
+        const tailwind_exists = blk: {
+            project_dir.access(io, "bin/tailwindcss", .{}) catch break :blk false;
+            break :blk true;
+        };
+
+        if (tailwind_exists) {
+            current_step = "compile css";
+            var css_child = std.process.spawn(io, .{
+                .argv = &.{ "./bin/tailwindcss", "-i", "src/styles.css", "-o", "public/css/app.css" },
+                .cwd = .{ .path = app_name },
+            }) catch |err| {
+                fail_err = err;
+                return err;
+            };
+            const css_term = css_child.wait(io) catch |err| {
+                fail_err = err;
+                return err;
+            };
+            switch (css_term) {
+                .exited => |code| if (code != 0) {
+                    fail_err = error.TailwindCompileFailed;
+                    return error.TailwindCompileFailed;
+                },
+                else => {
+                    fail_err = error.TailwindCompileFailed;
+                    return error.TailwindCompileFailed;
+                },
+            }
+            std.debug.print("  CSS compiled → public/css/app.css\n", .{});
+        } else {
+            std.debug.print("  CSS will be compiled on first 'zig build run'\n", .{});
         }
-        std.debug.print("  CSS compiled → public/css/app.css\n", .{});
     }
 
     current_step = "fetch spider";
@@ -290,9 +270,10 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
 
     std.debug.print("\nDone! Next steps:\n", .{});
     std.debug.print("  cd {s}\n", .{app_name});
-    std.debug.print("  zig build run\n", .{});
+    std.debug.print("  zig build run        ← downloads assets and starts server automatically\n", .{});
+    std.debug.print("                         (requires spider CLI in PATH — run: spider install)\n", .{});
 
-    if (skip_downloads) {
-        std.debug.print("\nwarning: downloads skipped, run `spider fetch-deps` to download missing binaries.\n", .{});
+    if (effective_skip) {
+        std.debug.print("\nwarning: assets not downloaded, run `spider install` to download them.\n", .{});
     }
 }
