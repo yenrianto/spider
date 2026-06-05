@@ -20,6 +20,10 @@ pub fn build(b: *std.Build) void {
     });
     _ = spider_sqlite;
 
+    const env_stub = b.createModule(.{
+        .root_source_file = b.path("src/test_env_stub.zig"),
+    });
+
     const test_mod = b.createModule(.{
         .root_source_file = b.path("src/sqlite.zig"),
         .target = target,
@@ -27,6 +31,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
         .imports = &.{
             .{ .name = "zqlite", .module = zqlite_lib },
+            .{ .name = "spider", .module = env_stub },
         },
     });
     const tests = b.addTest(.{ .root_module = test_mod });

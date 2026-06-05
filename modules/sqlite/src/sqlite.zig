@@ -10,17 +10,19 @@ var db_io: ?std.Io = null;
 
 // ── Config ────────────────────────────────────────────────
 pub const DbConfig = struct {
-    path: []const u8 = "db.sqlite",
+    path: ?[]const u8 = null, // null → read SQLITE_PATH from env, fallback "db.sqlite"
     size: usize = 5,
 };
 
 // ── Init / Deinit ─────────────────────────────────────────
 pub fn init(allocator: std.mem.Allocator, io: std.Io, overrides: DbConfig) !void {
     db_allocator = allocator;
-    const path_buf = try allocator.alloc(u8, overrides.path.len + 1);
+    const env = @import("spider").env;
+    const path = overrides.path orelse env.getOr("SQLITE_PATH", "db.sqlite");
+    const path_buf = try allocator.alloc(u8, path.len + 1);
     db_path = path_buf;
-    @memcpy(path_buf[0..overrides.path.len], overrides.path);
-    path_buf[overrides.path.len] = 0;
+    @memcpy(path_buf[0..path.len], path);
+    path_buf[path.len] = 0;
     const path_z: [*:0]const u8 = @ptrCast(path_buf.ptr);
     if (overrides.size == 1) {
         const c = try zqlite.open(path_z, zqlite.OpenFlags.Create | zqlite.OpenFlags.EXResCode);
@@ -220,6 +222,32 @@ pub fn begin() !Transaction {
 
 // ── Migrations placeholder ────────────────────────────────
 fn runMigrations(_: zqlite.Conn, _: ?*anyopaque) !void {}
+
+// ── SqliteDriver (Database interface) ────────────────────────
+
+fn sqliteExecFn(ptr: *anyopaque, sql: []const u8) anyerror!void {
+    _ = ptr;
+    var it = std.mem.splitScalar(u8, sql, ';');
+    while (it.next()) |stmt| {
+        const s = std.mem.trim(u8, stmt, " \n\r\t");
+        if (s.len == 0) continue;
+        try exec(s);
+    }
+}
+
+fn sqliteDeinitFn(_: *anyopaque) void {}
+
+pub const SqliteDriver = struct {
+    _dummy: u8 = 0,
+
+    pub fn database(_: *SqliteDriver) @import("spider").Database {
+        return .{
+            .ptr = @constCast(db_pool orelse @panic("SQLite not initialized")),
+            .exec_fn = sqliteExecFn,
+            .deinit_fn = sqliteDeinitFn,
+        };
+    }
+};
 
 // ── Tests ─────────────────────────────────────────────────────
 

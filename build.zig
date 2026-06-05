@@ -151,7 +151,7 @@ pub fn build(b: *std.Build) void {
     const zqlite_dep = b.dependency("zqlite", .{ .target = target, .optimize = optimize });
     const zqlite_mod = zqlite_dep.module("zqlite");
 
-    const sqlite_test = b.addTest(.{
+        const sqlite_test = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("modules/sqlite/src/sqlite.zig"),
             .target = target,
