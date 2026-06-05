@@ -169,9 +169,9 @@ pub fn queryExecute(comptime T: type, arena: std.mem.Allocator, sql: []const u8)
     while (it.next()) |stmt| {
         const s = std.mem.trim(u8, stmt, " \n\r\t");
         if (s.len == 0) continue;
-        try conn.execNoArgs(@ptrCast(s));
+        const s_z = try arena.dupeSentinel(u8, s, 0);
+        try conn.execNoArgs(s_z);
     }
-    _ = arena;
     return if (T == void) {} else &[_]T{};
 }
 

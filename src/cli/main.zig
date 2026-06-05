@@ -16,6 +16,7 @@ const usage =
     \\    --skip-downloads             Skip binary downloads (tailwindcss, alpine, htmx, icons)
     \\    --api                        API-only project (no HTML views)
     \\    --no-db                      Skip database setup
+    \\    --pg                         Use PostgreSQL instead of default SQLite
     \\  spider generate <subcommand>   Generate code (aliases: g)
     \\  spider g <subcommand>          Alias for generate
     \\    feature <name>                Generate a new feature
@@ -44,6 +45,7 @@ pub fn main(init: std.process.Init) !void {
         var skip_downloads = false;
         var api_only = false;
         var no_db = false;
+        var use_pg = false;
         var app_name_opt: ?[]const u8 = null;
         while (args.next()) |arg| {
             if (std.mem.eql(u8, arg, "--daisyui")) {
@@ -54,6 +56,8 @@ pub fn main(init: std.process.Init) !void {
                 api_only = true;
             } else if (std.mem.eql(u8, arg, "--no-db")) {
                 no_db = true;
+            } else if (std.mem.eql(u8, arg, "--pg")) {
+                use_pg = true;
             } else {
                 app_name_opt = arg;
             }
@@ -62,7 +66,7 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("error: missing app name\nUsage: spider new <app_name>\n", .{});
             return error.MissingAppName;
         };
-        try new.run(io, allocator, app_name, use_daisyui, skip_downloads, api_only, no_db);
+        try new.run(io, allocator, app_name, use_daisyui, skip_downloads, api_only, no_db, use_pg);
     } else if (std.mem.eql(u8, command, "generate")) {
         const subcommand = args.next() orelse {
             std.debug.print("Usage: spider generate <subcommand>\n", .{});

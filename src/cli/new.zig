@@ -26,8 +26,11 @@ const favicon_ico = @embedFile("assets/favicon.ico");
 const layout_daisyui_html_tmpl = @embedFile("templates/layout_daisyui.html.template");
 const home_daisyui_index_tmpl = @embedFile("templates/home_daisyui_index.html.template");
 const build_zig_pg_tmpl = @embedFile("templates/build.zig.pg.template");
+const build_zig_sqlite_tmpl = @embedFile("templates/build.zig.sqlite.template");
 const main_zig_pg_tmpl = @embedFile("templates/main.zig.pg.template");
-const migrations_zig_tmpl = @embedFile("templates/migrations.zig.template");
+const main_zig_sqlite_tmpl = @embedFile("templates/main.zig.sqlite.template");
+const migrations_zig_sqlite_tmpl = @embedFile("templates/migrations.zig.sqlite.template");
+const migrations_zig_pg_tmpl = @embedFile("templates/migrations.zig.pg.template");
 
 fn runZigFetch(io: std.Io, app_name: []const u8) !void {
     var child = try std.process.spawn(io, .{
@@ -71,10 +74,12 @@ fn readFingerprint(io: std.Io, allocator: std.mem.Allocator, dir: std.Io.Dir) ![
     return extractFingerprint(allocator, content);
 }
 
-fn render(allocator: std.mem.Allocator, tmpl: []const u8, app_name: []const u8, fingerprint: []const u8) ![]const u8 {
+fn render(allocator: std.mem.Allocator, tmpl: []const u8, app_name: []const u8, fingerprint: []const u8, db_module: []const u8) ![]const u8 {
     const step1 = try std.mem.replaceOwned(u8, allocator, tmpl, "{{app_name}}", app_name);
     defer allocator.free(step1);
-    return std.mem.replaceOwned(u8, allocator, step1, "{{fingerprint}}", fingerprint);
+    const step2 = try std.mem.replaceOwned(u8, allocator, step1, "{{fingerprint}}", fingerprint);
+    defer allocator.free(step2);
+    return std.mem.replaceOwned(u8, allocator, step2, "{{db_module}}", db_module);
 }
 
 fn writeFile(io: std.Io, dir: std.Io.Dir, path: []const u8, content: []const u8) !void {
@@ -89,7 +94,7 @@ fn writeFile(io: std.Io, dir: std.Io.Dir, path: []const u8, content: []const u8)
     try writer.interface.flush();
 }
 
-pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_daisyui: bool, skip_downloads: bool, api_only: bool, no_db: bool) !void {
+pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_daisyui: bool, skip_downloads: bool, api_only: bool, no_db: bool, use_pg: bool) !void {
     // --api implies no database and no asset downloads
     const effective_no_db = no_db or api_only;
     const effective_skip = skip_downloads or api_only;
@@ -147,8 +152,8 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
 
     const selected_layout_tmpl = if (use_daisyui) layout_daisyui_html_tmpl else layout_html_tmpl;
     const selected_home_index_tmpl = if (use_daisyui) home_daisyui_index_tmpl else home_index_tmpl;
-    const selected_build_zig_tmpl = if (effective_no_db) build_zig_tmpl else build_zig_pg_tmpl;
-    const selected_main_zig_tmpl = if (effective_no_db) main_zig_tmpl else main_zig_pg_tmpl;
+    const selected_build_zig_tmpl = if (effective_no_db) build_zig_tmpl else if (use_pg) build_zig_pg_tmpl else build_zig_sqlite_tmpl;
+    const selected_main_zig_tmpl = if (effective_no_db) main_zig_tmpl else if (use_pg) main_zig_pg_tmpl else main_zig_sqlite_tmpl;
 
     const files = .{
         .{ "build.zig", selected_build_zig_tmpl },
@@ -183,7 +188,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     inline for (files) |f| {
         const path = f[0];
         const tmpl = f[1];
-        const content = render(allocator, tmpl, app_name, fingerprint) catch |err| {
+        const content = render(allocator, tmpl, app_name, fingerprint, "") catch |err| {
             fail_err = err;
             return err;
         };
@@ -206,7 +211,9 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     }
 
     if (!effective_no_db) {
-        const migrations_content = render(allocator, migrations_zig_tmpl, app_name, fingerprint) catch |err| {
+        const db_module = if (use_pg) "pg" else "sqlite";
+        const selected_migrations_tmpl = if (use_pg) migrations_zig_pg_tmpl else migrations_zig_sqlite_tmpl;
+        const migrations_content = render(allocator, selected_migrations_tmpl, app_name, fingerprint, db_module) catch |err| {
             fail_err = err;
             return err;
         };

@@ -13,7 +13,8 @@ pub fn main(init: std.process.Init) !void {
     const io = init.io;
 
     // Subcommands: ./myapp migrate
-    var args = init.args();
+    var args = try std.process.Args.Iterator.initAllocator(init.minimal.args, allocator);
+    defer args.deinit();
     _ = args.next(); // skip executable
     if (args.next()) |cmd| {
         if (std.mem.eql(u8, cmd, "migrate")) {

@@ -4,7 +4,10 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const spider_dep = b.dependency("spider", .{ .target = target, .pg = true });
+    const spider_dep = b.dependency("spider", .{
+        .target = target,
+        .sqlite = true,
+    });
     const spider_mod = spider_dep.module("spider");
 
     // Register spider.config.zig
