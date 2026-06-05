@@ -1,0 +1,11 @@
+.{
+    .name = .spider_sqlite,
+    .version = "0.1.0",
+    .fingerprint = 0xfbf037f261deeeac,
+    .paths = .{""},
+    .dependencies = .{
+        .zqlite = .{
+            .path = "sqlite_driver_impl",
+        },
+    },
+}
