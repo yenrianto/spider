@@ -146,4 +146,23 @@ pub fn build(b: *std.Build) void {
     run_pg_tests.has_side_effects = true;
     const test_pg_step = b.step("test-pg", "Run pg wrapper integration tests");
     test_pg_step.dependOn(&run_pg_tests.step);
+
+    // test-sqlite — sqlite wrapper tests (uses :memory:, no external DB needed)
+    const zqlite_dep = b.dependency("zqlite", .{ .target = target, .optimize = optimize });
+    const zqlite_mod = zqlite_dep.module("zqlite");
+
+    const sqlite_test = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("modules/sqlite/src/sqlite.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+            .imports = &.{
+                .{ .name = "zqlite", .module = zqlite_mod },
+            },
+        }),
+    });
+    const run_sqlite_tests = b.addRunArtifact(sqlite_test);
+    const test_sqlite_step = b.step("test-sqlite", "Run sqlite tests");
+    test_sqlite_step.dependOn(&run_sqlite_tests.step);
 }
