@@ -826,6 +826,31 @@ test "else if - full user template with three sections" {
     try std.testing.expect(std.mem.indexOf(u8, r, "Outro") == null);
 }
 
+test "double braces with JS methods inside for body" {
+    // Regression: {{ }} containing JS method bodies (nested { }) inside a for loop
+    // was being split at the second { (which starts with "{ " matching interpolation).
+    const alc = std.testing.allocator;
+    const Item = struct { id: []const u8, active: bool };
+    const items = &[_]Item{
+        .{ .id = "a1", .active = true },
+        .{ .id = "b2", .active = false },
+    };
+    const template_str =
+        \\for (items) |item| {
+        \\  if (item.active) {
+        \\    <div x-data="{{ count: 0, inc() { this.count++; }, dec() { if (this.count > 0) { this.count--; } } }}">{ item.id }</div>
+        \\  }
+        \\}
+    ;
+    var tmpl = try Template.init(alc, template_str);
+    defer tmpl.deinit();
+    const result = try tmpl.render(.{ .items = items }, alc);
+    defer alc.free(result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "{ count: 0, inc() { this.count++; }, dec() { if (this.count > 0) { this.count--; } } }") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, ">a1<") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "b2") == null);
+}
+
 // test "loop.index - 0-based index available inside for" {
 //     const alc = std.testing.allocator;
 //     const tmpl_str =

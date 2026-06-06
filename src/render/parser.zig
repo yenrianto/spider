@@ -488,6 +488,7 @@ pub fn parseTextNodes(alc: std.mem.Allocator, str: []const u8) ![]Node {
             const start = pos;
             while (pos < str.len) {
                 const r = str[pos..];
+                if (std.mem.startsWith(u8, r, "{{")) break;
                 if (std.mem.startsWith(u8, r, "{ ")) break;
                 if (std.mem.startsWith(u8, r, "{ slot }")) break;
                 if (std.mem.startsWith(u8, r, "if (")) break;
