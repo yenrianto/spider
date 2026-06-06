@@ -1,79 +1,103 @@
 extends "layout"
 
-<div class="min-h-screen bg-base-100 text-base-content flex flex-col items-center justify-center p-6">
-    <div class="text-center mb-10">
-        <div class="flex flex-col items-center gap-4 mb-6">
-            <img src="/images/logo.png" alt="Spider Logo" class="w-20 h-20 object-contain" />
-            <h1 class="text-3xl font-black tracking-tight">Web Framework for Zig</h1>
-            <span class="badge badge-outline border-base-300 text-[10px] opacity-50">v0.6.3</span>
-        </div>
-        
-        <p class="text-lg text-base-content/60 mb-8">
-            Get started by editing <code class="px-2 py-1 rounded bg-base-200 text-warning text-sm font-mono">src/main.zig</code>
-        </p>
+<div class="min-h-screen flex flex-col items-center justify-center p-6">
 
-        <div class="flex flex-wrap justify-center gap-4 mb-8">
-            <a href="https://spiderme.org/docs" class="btn btn-outline gap-2" target="_blank">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253m15 0c-1.168-.776-2.754-1.253-4.5-1.253s-3.332.477-4.5 1.253"></path>
-                </svg>
-                Documentation
-            </a>
-            <a href="https://spiderme.org" class="btn btn-warning gap-2" target="_blank">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
-                </svg>
-                spiderme.org
-            </a>
-            <a href="https://github.com/spiderme/spider" class="btn btn-outline gap-2" target="_blank">
-                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                </svg>
-                GitHub
-            </a>
-        </div>
-
-        <!-- Status -->
-        <div class="flex items-center justify-center gap-2 text-sm">
-            <span class="h-2 w-2 rounded-full bg-success animate-pulse"></span>
-            <span class="text-base-content/60">Server running on</span>
-            <code class="px-2 py-1 rounded bg-base-200 text-success text-sm font-mono">http://localhost:3000</code>
-        </div>
+    <div class="flex flex-col items-center gap-3 mb-12">
+        <img src="/images/logo.png" alt="Spider Logo" class="w-14 h-14 object-contain" />
+        <p class="text-xs font-mono tracking-widest uppercase opacity-30">Spider</p>
     </div>
 
-    <!-- Terminal -->
-    <div class="w-full max-w-2xl rounded-2xl border border-base-300 bg-[#0d0f14] overflow-hidden shadow-2xl">
-        <div class="flex items-center gap-2 px-4 py-3 bg-white/5 border-b border-white/5">
-            <div class="flex gap-1.5">
-                <div class="w-3 h-3 rounded-full bg-error/70"></div>
-                <div class="w-3 h-3 rounded-full bg-warning/70"></div>
-                <div class="w-3 h-3 rounded-full bg-success/70"></div>
-            </div>
-            <span class="ml-2 text-[10px] uppercase tracking-wider text-base-content/30 font-bold">Console</span>
-        </div>
-        <div class="p-6 font-mono text-sm space-y-2 text-white/80">
-            <div class="text-success">$ zig build run</div>
-            <div class="text-white/40">Compiling spider-zig...</div>
-            <div class="text-success">✓ Compiled successfully in 124ms</div>
-            <div class="text-success">✓ Listening on http://localhost:3000</div>
-            if (logs.len > 0) {
-                <div class="pt-4 border-t border-white/10 space-y-1">
-                    for (logs) |log| {
-                        <div class="flex items-center gap-3 text-xs opacity-60">
-                            <span class="text-blue-400">GET</span>
-                            <span class="text-white/60">{ log.path }</span>
-                            <span class="text-success">{ log.status }</span>
-                            <span class="text-white/40">{ log.time }ms</span>
-                        </div>
-                    }
+    <div class="w-full max-w-2xl rounded-xl overflow-hidden" style="border: 1px solid rgba(255,255,255,0.08);">
+
+        <div class="grid grid-cols-2" style="border-bottom: 1px solid rgba(255,255,255,0.08);">
+
+            <a href="https://spiderme.org/docs" target="_blank"
+               class="group flex flex-col gap-5 p-8 bg-base-200 hover:bg-base-300 transition-colors"
+               style="border-right: 1px solid rgba(255,255,255,0.08);">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center text-base-content/40"
+                     style="background: rgba(255,255,255,0.05);">
+                    <i class="ti ti-book-2 text-lg" aria-hidden="true"></i>
                 </div>
-            }
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium">Documentation</span>
+                        <i class="ti ti-arrow-right text-sm text-base-content/20 group-hover:text-base-content/50 transition-colors" aria-hidden="true"></i>
+                    </div>
+                    <p class="text-xs text-base-content/40 leading-relaxed">
+                        Everything you need to build with Spider. Routing, templates, middleware, and HTMX patterns.
+                    </p>
+                </div>
+            </a>
+
+            <a href="https://spiderme.org/docs/quickstart" target="_blank"
+               class="group flex flex-col gap-5 p-8 bg-base-200 hover:bg-base-300 transition-colors">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center text-base-content/40"
+                     style="background: rgba(255,255,255,0.05);">
+                    <i class="ti ti-terminal-2 text-lg" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium">Quick start</span>
+                        <i class="ti ti-arrow-right text-sm text-base-content/20 group-hover:text-base-content/50 transition-colors" aria-hidden="true"></i>
+                    </div>
+                    <p class="text-xs text-base-content/40 leading-relaxed">
+                        Get a Spider project running in minutes. Install Zig, clone the starter,
+                        run <code class="text-warning font-mono text-xs">zig build run</code>.
+                    </p>
+                </div>
+            </a>
+
         </div>
+
+        <div class="grid grid-cols-2">
+
+            <a href="https://github.com/llllOllOOll/spider" target="_blank"
+               class="group flex flex-col gap-5 p-8 bg-base-200 hover:bg-base-300 transition-colors"
+               style="border-right: 1px solid rgba(255,255,255,0.08);">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center text-base-content/40"
+                     style="background: rgba(255,255,255,0.05);">
+                    <i class="ti ti-brand-github text-lg" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium">GitHub</span>
+                        <i class="ti ti-arrow-right text-sm text-base-content/20 group-hover:text-base-content/50 transition-colors" aria-hidden="true"></i>
+                    </div>
+                    <p class="text-xs text-base-content/40 leading-relaxed">
+                        Browse the source, open issues, and contribute. Spider is open source and built in the open.
+                    </p>
+                </div>
+            </a>
+
+            <a href="https://spiderme.org" target="_blank"
+               class="group flex flex-col gap-5 p-8 bg-base-200 hover:bg-base-300 transition-colors">
+                <div class="w-10 h-10 rounded-lg flex items-center justify-center text-base-content/40"
+                     style="background: rgba(255,255,255,0.05);">
+                    <i class="ti ti-world text-lg" aria-hidden="true"></i>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium">Ecosystem</span>
+                        <i class="ti ti-arrow-right text-sm text-base-content/20 group-hover:text-base-content/50 transition-colors" aria-hidden="true"></i>
+                    </div>
+                    <p class="text-xs text-base-content/40 leading-relaxed">
+                        HTMX, Alpine.js, and Zig's standard library work seamlessly
+                        with Spider. No bundlers, no node_modules.
+                    </p>
+                </div>
+            </a>
+
+        </div>
+
     </div>
 
-    <!-- Footer -->
-    <div class="mt-8 text-center text-sm text-base-content/40">
-        <p>Powered by <a href="https://spiderme.org" class="text-warning font-bold hover:underline"
-          target="_blank">Spider</a> • Running on Zig 0.17</p>
+    <div class="flex items-center gap-4 mt-8 text-xs font-mono opacity-20">
+        <span>Spider v0.6.4 · Zig 0.17.0-dev.667+0569f1f6a</span>
+        <a href="https://discord.gg/Z9aMYY6g" target="_blank"
+           class="hover:opacity-60 transition-opacity">
+            <i class="ti ti-brand-discord" aria-hidden="true"></i>
+            Discord
+        </a>
     </div>
+
 </div>

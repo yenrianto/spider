@@ -13,6 +13,11 @@ const repository_pg_tmpl = @embedFile("templates/feature/repository.zig.pg.templ
 const presenter_tmpl = @embedFile("templates/feature/presenter.zig.template");
 const controller_tmpl = @embedFile("templates/feature/controller.zig.template");
 const index_html_tmpl = @embedFile("templates/feature/index.html.template");
+const list_html_tmpl = @embedFile("templates/feature/_list.html.template");
+const card_html_tmpl = @embedFile("templates/feature/_card.html.template");
+const form_html_tmpl = @embedFile("templates/feature/_form.html.template");
+const edit_form_html_tmpl = @embedFile("templates/feature/_edit_form.html.template");
+const page_html_tmpl = @embedFile("templates/feature/page.html.template");
 const migration_sql_sqlite_tmpl = @embedFile("templates/feature/migration.sql.sqlite.template");
 const migration_sql_pg_tmpl = @embedFile("templates/feature/migration.sql.pg.template");
 const migrations_zig_sqlite_tmpl = @embedFile("templates/migrations.zig.sqlite.template");
@@ -62,6 +67,21 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, feature: []const u8) !void 
     const index_html_content = try template_engine.renderTemplate(allocator, index_html_tmpl, feature, plural);
     defer allocator.free(index_html_content);
 
+    const list_html_content = try template_engine.renderTemplate(allocator, list_html_tmpl, feature, plural);
+    defer allocator.free(list_html_content);
+
+    const card_html_content = try template_engine.renderTemplate(allocator, card_html_tmpl, feature, plural);
+    defer allocator.free(card_html_content);
+
+    const form_html_content = try template_engine.renderTemplate(allocator, form_html_tmpl, feature, plural);
+    defer allocator.free(form_html_content);
+
+    const edit_form_html_content = try template_engine.renderTemplate(allocator, edit_form_html_tmpl, feature, plural);
+    defer allocator.free(edit_form_html_content);
+
+    const page_html_content = try template_engine.renderTemplate(allocator, page_html_tmpl, feature, plural);
+    defer allocator.free(page_html_content);
+
     const timestamp = migration_updater.generateTimestamp(io);
     const migration_name = try std.fmt.allocPrint(allocator, "{d}_create_{s}.sql", .{ timestamp, plural });
     defer allocator.free(migration_name);
@@ -106,6 +126,29 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, feature: []const u8) !void 
 
     try fs_utils.writeFile(io, feature_dir, "views/index.html", index_html_content);
     std.debug.print("  create  src/features/{s}/views/index.html\n", .{feature});
+
+    const list_filename = try std.fmt.allocPrint(allocator, "views/{s}List.html", .{Feature});
+    defer allocator.free(list_filename);
+    try fs_utils.writeFile(io, feature_dir, list_filename, list_html_content);
+    std.debug.print("  create  src/features/{s}/{s}\n", .{ feature, list_filename });
+
+    const card_filename = try std.fmt.allocPrint(allocator, "views/{s}Card.html", .{Feature});
+    defer allocator.free(card_filename);
+    try fs_utils.writeFile(io, feature_dir, card_filename, card_html_content);
+    std.debug.print("  create  src/features/{s}/{s}\n", .{ feature, card_filename });
+
+    const form_filename = try std.fmt.allocPrint(allocator, "views/{s}Form.html", .{Feature});
+    defer allocator.free(form_filename);
+    try fs_utils.writeFile(io, feature_dir, form_filename, form_html_content);
+    std.debug.print("  create  src/features/{s}/{s}\n", .{ feature, form_filename });
+
+    const edit_form_filename = try std.fmt.allocPrint(allocator, "views/{s}EditForm.html", .{Feature});
+    defer allocator.free(edit_form_filename);
+    try fs_utils.writeFile(io, feature_dir, edit_form_filename, edit_form_html_content);
+    std.debug.print("  create  src/features/{s}/{s}\n", .{ feature, edit_form_filename });
+
+    try fs_utils.writeFile(io, feature_dir, "views/page.html", page_html_content);
+    std.debug.print("  create  src/features/{s}/views/page.html\n", .{feature});
 
     const migration_path = try std.fmt.allocPrint(allocator, "src/core/db/migrations/{s}", .{migration_name});
     defer allocator.free(migration_path);

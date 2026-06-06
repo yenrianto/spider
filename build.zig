@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
 
     const pacman_dep = b.dependency("pacman", .{});
     const pg_dep = b.dependency("pg", .{ .target = target, .optimize = optimize });
+    const zqlite_dep = b.dependency("zqlite", .{ .target = target, .optimize = optimize });
 
     const mod = b.addModule("spider", .{
         .root_source_file = b.path("src/spider.zig"),
@@ -70,8 +71,10 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/cli/main.zig"),
             .target = target,
             .optimize = optimize,
+            .link_libc = true,
             .imports = &.{
                 .{ .name = "pg", .module = pg_dep.module("pg") },
+                .{ .name = "zqlite", .module = zqlite_dep.module("zqlite") },
             },
         }),
     });
@@ -148,7 +151,6 @@ pub fn build(b: *std.Build) void {
     test_pg_step.dependOn(&run_pg_tests.step);
 
     // test-sqlite — sqlite wrapper tests (uses :memory:, no external DB needed)
-    const zqlite_dep = b.dependency("zqlite", .{ .target = target, .optimize = optimize });
     const zqlite_mod = zqlite_dep.module("zqlite");
 
         const sqlite_test = b.addTest(.{

@@ -1,0 +1,67 @@
+<div x-data="{{ editModal: false, deleteModal: false, deleteId: 0 }}"
+     @item-saved.window="editModal = false"
+     @open-edit.window="editModal = true"
+     @open-delete.window="deleteId = $event.detail; deleteModal = true"
+     class="max-w-2xl mx-auto p-8">
+
+    <div class="flex justify-between items-center mb-4">
+        <h1 class="text-2xl font-bold">{ page_title }</h1>
+        <button class="btn btn-primary"
+                hx-get="/{{plural}}/new"
+                hx-target="#{{feature}}-list"
+                hx-swap="beforebegin">
+            + New
+        </button>
+    </div>
+
+    <div id="{{feature}}-list">
+        if ({{plural}}.len == 0) {
+            <p class="text-base-content/50">No {{plural}} found.</p>
+        }
+        for ({{plural}}) |item| {
+            <{{Feature}}Card id="{ item.id }" name="{ item.name }" />
+        }
+    </div>
+
+    <!-- Edit Modal -->
+    <template x-teleport="body">
+        <div x-show="editModal"
+             x-cloak
+             style="display:none"
+             class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4"
+             x-transition>
+            <div class="bg-base-200 rounded-xl p-6 w-full max-w-sm shadow-2xl"
+                 @click.stop>
+                <div id="modal-content">
+                    <p class="text-base-content/50">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Delete Modal -->
+    <template x-teleport="body">
+        <div x-show="deleteModal"
+             x-cloak
+             style="display:none"
+             class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4"
+             x-transition>
+            <div class="bg-base-200 rounded-xl p-6 w-full max-w-sm shadow-2xl"
+                 @click.stop>
+                <h3 class="text-lg font-bold mb-2">Delete {{Feature}}</h3>
+                <p class="text-base-content/70 mb-6">Are you sure? This action cannot be undone.</p>
+                <div class="flex gap-2 justify-end">
+                    <button class="btn btn-ghost" @click="deleteModal = false">Cancel</button>
+                    <button class="btn btn-error"
+                            @click="
+                                htmx.ajax('POST', '/{{plural}}/' + deleteId + '/delete', {target:'#{{feature}}-' + deleteId, swap:'outerHTML'});
+                                deleteModal = false;
+                            ">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+</div>

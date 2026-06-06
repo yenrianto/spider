@@ -8,30 +8,12 @@ const Response = spider.Response;
 pub fn index(c: *spider.Ctx) !Response {
     const items = try repository.findAll(c.arena);
     const context = try presenter.build{{Feature}}ListContext(c.arena, items);
-    return c.view("{{plural}}/index", context, .{});
+    if (c.isHtmx()) return c.view("{{plural}}/index", context, .{});
+    return c.view("{{plural}}/page", context, .{});
 }
 
 pub fn newForm(c: *spider.Ctx) !Response {
-    if (c.isHtmx()) {
-        return c.html(
-            \\<div class="card bg-base-200 p-4 mt-4">
-            \\  <form hx-post="/{{plural}}/create"
-            \\        hx-target="#{{feature}}-list"
-            \\        hx-swap="afterbegin">
-            \\    <div class="form-control mb-3">
-            \\      <label class="label"><span class="label-text">Name</span></label>
-            \\      <input class="input input-bordered w-full"
-            \\             name="name" placeholder="{{Feature}} name..." />
-            \\    </div>
-            \\    <div class="flex gap-2 justify-end">
-            \\      <button type="button" class="btn btn-ghost btn-sm"
-            \\              onclick="this.closest('.card').remove()">Cancel</button>
-            \\      <button class="btn btn-primary btn-sm" type="submit">Save</button>
-            \\    </div>
-            \\  </form>
-            \\</div>
-        , .{});
-    }
+    if (c.isHtmx()) return c.view("{{Feature}}Form", .{}, .{});
     return c.redirect("/{{plural}}");
 }
 
@@ -40,35 +22,17 @@ pub fn edit(c: *spider.Ctx) !Response {
     const id = try std.fmt.parseInt(i64, id_str, 10);
     const item = try repository.findById(c.arena, id);
     const name = if (item) |i| i.name else "";
-    const html = try std.fmt.allocPrint(c.arena,
-        \\<h3 class="font-bold text-lg mb-4">Edit {{Feature}}</h3>
-        \\<form hx-post="/{{plural}}/{d}/update"
-        \\      hx-target="#{{feature}}-{d}"
-        \\      hx-swap="outerHTML">
-        \\  <div class="form-control mb-4">
-        \\    <label class="label"><span class="label-text">Name</span></label>
-        \\    <input class="input input-bordered w-full"
-        \\           name="name" value="{s}" />
-        \\  </div>
-        \\  <div class="modal-action">
-        \\    <button class="btn btn-primary" type="submit"
-        \\            onclick="document.getElementById('{{feature}}-modal').close()">
-        \\      Save
-        \\    </button>
-        \\  </div>
-        \\</form>
-    , .{ id, id, name });
-    return c.html(html, .{});
+    return c.view("{{Feature}}EditForm", .{ .id = id, .name = name }, .{});
 }
 
 pub fn create(c: *spider.Ctx) !Response {
     const input = try c.parseForm(model.CreateInput);
-    _ = try repository.create(c.arena, input);
+    const created = try repository.create(c.arena, input);
     if (c.isHtmx()) {
-        const headers = try c.arena.alloc([2][]const u8, 2);
+        const item = created orelse return c.redirect("/{{plural}}");
+        const headers = try c.arena.alloc([2][]const u8, 1);
         headers[0] = .{ "HX-Trigger", "item-saved" };
-        headers[1] = .{ "HX-Redirect", "/{{plural}}" };
-        return c.html("", .{ .headers = headers });
+        return c.view("{{Feature}}Card", .{ .id = item.id, .name = item.name }, .{ .headers = headers });
     }
     return c.redirect("/{{plural}}");
 }
@@ -77,26 +41,12 @@ pub fn update(c: *spider.Ctx) !Response {
     const id_str = c.params.get("id") orelse return error.MissingParam;
     const id = try std.fmt.parseInt(i64, id_str, 10);
     const input = try c.parseForm(model.UpdateInput);
-    const name = input.name orelse "";
-    _ = try repository.update(c.arena, id, input);
+    const updated = try repository.update(c.arena, id, input);
+    const name = if (updated) |u| u.name else input.name orelse "";
     if (c.isHtmx()) {
-        const html = try std.fmt.allocPrint(c.arena,
-            \\<div id="{{feature}}-{d}" class="card bg-base-200 p-4 mb-3 flex justify-between items-center">
-            \\  <p>{s}</p>
-            \\  <div class="flex gap-2">
-            \\    <button class="btn btn-ghost btn-sm"
-            \\            hx-get="/{{plural}}/{d}/edit"
-            \\            hx-target="#modal-content"
-            \\            hx-swap="innerHTML"
-            \\            @click="document.getElementById('{{feature}}-modal').showModal()">✏️</button>
-            \\    <button class="btn btn-ghost btn-sm text-error"
-            \\            @click="document.getElementById('confirm-id').value='{d}'; document.getElementById('confirm-modal').showModal()">✕</button>
-            \\  </div>
-            \\</div>
-        , .{ id, name, id, id });
         const headers = try c.arena.alloc([2][]const u8, 1);
         headers[0] = .{ "HX-Trigger", "item-saved" };
-        return c.html(html, .{ .headers = headers });
+        return c.view("{{Feature}}Card", .{ .id = id, .name = name }, .{ .headers = headers });
     }
     return c.redirect("/{{plural}}");
 }

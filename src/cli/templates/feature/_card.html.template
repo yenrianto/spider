@@ -1,0 +1,17 @@
+<div id="{{feature}}-{ id }" class="card bg-base-200 p-4 mb-3 flex justify-between items-center">
+    <p>{ name }</p>
+    <div class="flex gap-2">
+        <button class="btn btn-ghost btn-sm"
+                hx-get="/{{plural}}/{ id }/edit"
+                hx-target="#modal-content"
+                hx-swap="innerHTML"
+                @click="$dispatch('open-edit')">
+            ✏️
+        </button>
+        <button class="btn btn-ghost btn-sm text-error"
+                data-task-id="{ id }"
+                @click="$dispatch('open-delete', $event.currentTarget.dataset.taskId)">
+            ✕
+        </button>
+    </div>
+</div>

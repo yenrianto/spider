@@ -20,6 +20,7 @@ const nav_bar_tmpl = @embedFile("templates/nav-bar.html.template");
 const side_bar_tmpl = @embedFile("templates/side-bar.html.template");
 const mobile_nav_tmpl = @embedFile("templates/mobile-nav.html.template");
 const toast_tmpl = @embedFile("templates/toast.html.template");
+const stores_js_tmpl = @embedFile("templates/stores.js.template");
 const spider_logo_png = @embedFile("assets/spider_logo.png");
 const favicon_png = @embedFile("assets/favicon.png");
 const favicon_ico = @embedFile("assets/favicon.ico");
@@ -170,6 +171,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
         .{ "src/shared/templates/side-bar.html", side_bar_tmpl },
         .{ "src/shared/templates/mobile-nav.html", mobile_nav_tmpl },
         .{ "src/shared/templates/toast.html", toast_tmpl },
+        .{ "public/js/stores.js", stores_js_tmpl },
         .{ "src/features/home/views/index.html", selected_home_index_tmpl },
         .{ "src/features/home/controller.zig", home_controller_tmpl },
         .{ "Dockerfile", dockerfile_tmpl },
