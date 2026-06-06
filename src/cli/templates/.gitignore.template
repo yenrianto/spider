@@ -1,7 +1,16 @@
 zig-out/
 zig-cache/
+.zig-cache/
 zig-pkg/
 .env
 .env.local
 .env.development
 .env.production
+
+# Spider generated assets (run: spider install)
+bin/
+public/css/app.css
+public/css/tabler-icons.min.css
+public/fonts/
+public/js/alpine.min.js
+public/js/htmx.min.js

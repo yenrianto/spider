@@ -22,6 +22,14 @@ fn downloadIfMissing(io: std.Io, allocator: std.mem.Allocator, url: []const u8, 
 }
 
 pub fn run(io: std.Io, allocator: std.mem.Allocator, project_dir: std.Io.Dir) !void {
+    // verify we're in a Spider project before downloading anything
+    project_dir.access(io, "spider.config.zig", .{}) catch {
+        std.debug.print("error: spider.config.zig not found\n", .{});
+        std.debug.print("Make sure you're in a Spider project directory.\n", .{});
+        std.debug.print("Run 'spider new <app_name>' to create a new project.\n", .{});
+        return error.NotASpiderProject;
+    };
+
     var downloaded: usize = 0;
 
     const assets = .{

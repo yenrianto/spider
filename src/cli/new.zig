@@ -96,6 +96,32 @@ fn writeFile(io: std.Io, dir: std.Io.Dir, path: []const u8, content: []const u8)
 }
 
 pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_daisyui: bool, skip_downloads: bool, api_only: bool, no_db: bool, use_pg: bool) !void {
+    // check zig is available
+    const zig_result = std.process.run(allocator, io, .{
+        .argv = &.{ "zig", "version" },
+    }) catch {
+        std.debug.print("error: 'zig' command not found\n", .{});
+        std.debug.print("Spider requires Zig 0.17.0-dev or later.\n", .{});
+        std.debug.print("Download at: https://ziglang.org/download/\n", .{});
+        return error.ZigNotFound;
+    };
+    defer allocator.free(zig_result.stdout);
+    defer allocator.free(zig_result.stderr);
+
+    switch (zig_result.term) {
+        .exited => |code| if (code != 0) {
+            std.debug.print("error: 'zig version' returned exit code {d}\n", .{code});
+            return error.ZigNotFound;
+        },
+        else => {
+            std.debug.print("error: 'zig version' terminated abnormally\n", .{});
+            return error.ZigNotFound;
+        },
+    }
+
+    const zig_version = std.mem.trim(u8, zig_result.stdout, " \n\r\t");
+    std.debug.print("Using Zig: {s}\n", .{zig_version});
+
     // --api implies no database and no asset downloads
     const effective_no_db = no_db or api_only;
     const effective_skip = skip_downloads or api_only;
@@ -225,6 +251,27 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
             return err;
         };
         std.debug.print("  create  {s}/src/core/db/migrations.zig\n", .{app_name});
+
+        // wire db/mod.zig into the module tree
+        writeFile(io, project_dir, "src/core/db/mod.zig", "pub const migrations = @import(\"migrations.zig\");\n") catch |err| {
+            fail_err = err;
+            return err;
+        };
+        std.debug.print("  create  {s}/src/core/db/mod.zig\n", .{app_name});
+
+        {
+            const core_mod_content = try project_dir.readFileAlloc(io, "src/core/mod.zig", allocator, .limited(4096));
+            defer allocator.free(core_mod_content);
+            if (std.mem.indexOf(u8, core_mod_content, "pub const db") == null) {
+                const updated = try std.mem.concat(allocator, u8, &.{ core_mod_content, "pub const db = @import(\"db/mod.zig\");\n" });
+                defer allocator.free(updated);
+                writeFile(io, project_dir, "src/core/mod.zig", updated) catch |err| {
+                    fail_err = err;
+                    return err;
+                };
+                std.debug.print("  update  {s}/src/core/mod.zig\n", .{app_name});
+            }
+        }
     }
 
     if (!effective_skip) {
