@@ -145,17 +145,12 @@ fn runSqlite(allocator: std.mem.Allocator, path: []const u8, pending: []const Pe
 
         const up = std.mem.trim(u8, m.up_sql, " \n\r\t");
         if (up.len > 0) {
-            var stmts = std.mem.splitScalar(u8, up, ';');
-            while (stmts.next()) |stmt| {
-                const s = std.mem.trim(u8, stmt, " \n\r\t");
-                if (s.len == 0) continue;
-                const s_z = try allocator.dupeSentinel(u8, s, 0);
-                defer allocator.free(s_z);
-                conn.execNoArgs(s_z.ptr) catch |err| {
-                    std.debug.print("error in migration {s}: {}\n", .{ m.version, err });
-                    return err;
-                };
-            }
+            const s_z = try allocator.dupeSentinel(u8, up, 0);
+            defer allocator.free(s_z);
+            conn.execNoArgs(s_z.ptr) catch |err| {
+                std.debug.print("error in migration {s}: {}\n", .{ m.version, err });
+                return err;
+            };
         }
 
         try conn.exec(
@@ -216,15 +211,10 @@ fn runPg(io: std.Io, allocator: std.mem.Allocator, env_content: []const u8, pend
 
         const up = std.mem.trim(u8, m.up_sql, " \n\r\t");
         if (up.len > 0) {
-            var stmts = std.mem.splitScalar(u8, up, ';');
-            while (stmts.next()) |stmt| {
-                const s = std.mem.trim(u8, stmt, " \n\r\t");
-                if (s.len == 0) continue;
-                _ = conn.exec(s, .{}) catch |err| {
-                    std.debug.print("error in migration {s}: {}\n", .{ m.version, err });
-                    return err;
-                };
-            }
+            _ = conn.exec(up, .{}) catch |err| {
+                std.debug.print("error in migration {s}: {}\n", .{ m.version, err });
+                return err;
+            };
         }
 
         _ = try conn.exec(

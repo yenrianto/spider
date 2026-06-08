@@ -6,5 +6,13 @@ CREATE TABLE IF NOT EXISTS {{plural}} (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TRIGGER IF NOT EXISTS {{plural}}_set_updated_at
+AFTER UPDATE ON {{plural}}
+FOR EACH ROW
+BEGIN
+    UPDATE {{plural}} SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+
 -- migrate:down
+DROP TRIGGER IF EXISTS {{plural}}_set_updated_at;
 DROP TABLE IF EXISTS {{plural}};

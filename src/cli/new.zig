@@ -11,6 +11,7 @@ const home_controller_tmpl = @embedFile("templates/home_controller.zig.template"
 const dockerfile_tmpl = @embedFile("templates/Dockerfile.template");
 const docker_compose_tmpl = @embedFile("templates/docker-compose.yml.template");
 const env_example_tmpl = @embedFile("templates/.env.example.template");
+const env_example_pg_tmpl = @embedFile("templates/.env.example.pg.template");
 const gitignore_tmpl = @embedFile("templates/.gitignore.template");
 const core_mod_tmpl = @embedFile("templates/core_mod.zig.template");
 const features_mod_tmpl = @embedFile("templates/features_mod.zig.template");
@@ -181,6 +182,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     const selected_home_index_tmpl = if (use_daisyui) home_daisyui_index_tmpl else home_index_tmpl;
     const selected_build_zig_tmpl = if (effective_no_db) build_zig_tmpl else if (use_pg) build_zig_pg_tmpl else build_zig_sqlite_tmpl;
     const selected_main_zig_tmpl = if (effective_no_db) main_zig_tmpl else if (use_pg) main_zig_pg_tmpl else main_zig_sqlite_tmpl;
+    const selected_env_example_tmpl = if (effective_no_db or !use_pg) env_example_tmpl else env_example_pg_tmpl;
 
     const files = .{
         .{ "build.zig", selected_build_zig_tmpl },
@@ -202,7 +204,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
         .{ "src/features/home/controller.zig", home_controller_tmpl },
         .{ "Dockerfile", dockerfile_tmpl },
         .{ "docker-compose.yml", docker_compose_tmpl },
-        .{ ".env.example", env_example_tmpl },
+        .{ ".env.example", selected_env_example_tmpl },
         .{ ".gitignore", gitignore_tmpl },
     };
 
