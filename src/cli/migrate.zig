@@ -212,7 +212,15 @@ fn runPg(io: std.Io, allocator: std.mem.Allocator, env_content: []const u8, pend
         const up = std.mem.trim(u8, m.up_sql, " \n\r\t");
         if (up.len > 0) {
             _ = conn.exec(up, .{}) catch |err| {
-                std.debug.print("error in migration {s}: {}\n", .{ m.version, err });
+                if (err == error.PG) {
+                    if (conn.err) |pg_err| {
+                        std.debug.print("error in migration {s}: {s} (SQLSTATE={s})\n", .{ m.version, pg_err.message, pg_err.code });
+                        if (pg_err.detail) |d| std.debug.print("  detail: {s}\n", .{d});
+                        if (pg_err.hint) |h| std.debug.print("  hint: {s}\n", .{h});
+                    }
+                } else {
+                    std.debug.print("error in migration {s}: {}\n", .{ m.version, err });
+                }
                 return err;
             };
         }

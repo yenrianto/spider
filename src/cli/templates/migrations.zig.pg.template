@@ -21,7 +21,7 @@ fn extractUpSection(sql_file: []const u8) []const u8 {
     return sql_file[content_start .. content_start + end];
 }
 
-fn migrate(alloc: std.mem.Allocator) !void {
+pub fn migrate(alloc: std.mem.Allocator) !void {
     var arena = std.heap.ArenaAllocator.init(alloc);
     defer arena.deinit();
     const a = arena.allocator();
