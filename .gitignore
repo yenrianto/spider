@@ -16,3 +16,4 @@ demos/
 .playwright-mcp/
 src/cli/.playwright-mcp/
 realtime/
+testmig/

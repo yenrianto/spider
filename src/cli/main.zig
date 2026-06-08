@@ -5,7 +5,7 @@ const install = @import("install.zig");
 const generate_vapid = @import("generate_vapid.zig");
 const migrate = @import("migrate.zig");
 
-const version = "0.6.5";
+const version = "0.6.6";
 
 const usage =
     \\Spider CLI — spiderme.org

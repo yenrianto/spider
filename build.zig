@@ -95,25 +95,6 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/build_helpers.zig"),
     });
 
-    // // spider-dev — test server
-    // const test_exe = b.addExecutable(.{
-    //     .name = "spider-dev",
-    //     .root_module = b.createModule(.{
-    //         .root_source_file = b.path("src/main.zig"),
-    //         .target = target,
-    //         .optimize = optimize,
-    //         .imports = &.{
-    //             .{ .name = "spider", .module = mod },
-    //         },
-    //     }),
-    // });
-    // b.installArtifact(test_exe);
-    //
-    // const run_dev = b.addRunArtifact(test_exe);
-    // run_dev.step.dependOn(b.getInstallStep());
-    // const run_step = b.step("run", "Run dev test server");
-    // run_step.dependOn(&run_dev.step);
-
     // tests — existing module tests
     const mod_tests = b.addTest(.{
         .root_module = mod,
