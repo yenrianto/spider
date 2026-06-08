@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.6] - 2026-06-08
+
+### Fixed
+
+- Migration runner no longer splits SQL by `;` — now sends entire SQL block via SimpleQuery,
+  fixing `CREATE FUNCTION` with `$$` dollar-quoting that previously broke on multi-line function bodies
+- Migration templates now idempotent: `DROP TRIGGER IF EXISTS` before `CREATE TRIGGER` in PostgreSQL,
+  `CREATE TRIGGER IF NOT EXISTS` in SQLite
+
+### Added
+
+- Global asset cache for `spider install` — assets downloaded to `~/.cache/spider/`
+  (or `~/Library/Caches/spider/` on macOS, `%LOCALAPPDATA%\spider\cache\` on Windows)
+  and reused across projects without re-downloading
+- Hardcoded asset versions for reproducible installs (Tailwind 4.3.0, DaisyUI 5.5.23,
+  Alpine 3.14.8, HTMX 2.0.4, Tabler 3.31.0) — replaces `@latest` URLs
+- Alternative PostgreSQL port (5452) in templates to avoid conflicts with local installations
+- `.env.example.pg.template` without `SQLITE_PATH` for `--pg` projects
+
+### Changed
+
+- Default PostgreSQL port in `docker-compose.yml.template` and `.env.example.template`:
+  `5432` → `5452`
+- `spider generate feature` uses correct `.env.example` template based on `--pg` flag
+
+### Removed
+
+- `src/main.zig` — dead code (unused TechEmpower benchmark)
+
 ## [Unreleased] — Modular Architecture
 
 ### Breaking Changes
