@@ -48,10 +48,10 @@ pub const Pool = struct {
         defer po.deinit();
         po.opts.size = opts.size;
         po.opts.timeout = opts.timeout;
-        return Pool.init(io, allocator, po.opts);
+        return Pool.init(io, allocator, po.opts, null);
     }
 
-    pub fn init(io: Io, allocator: Allocator, opts: Opts) !*Pool {
+    pub fn init(io: Io, allocator: Allocator, opts: Opts, err_out: ?*?[]const u8) !*Pool {
         var arena = std.heap.ArenaAllocator.init(allocator);
         const aa = arena.allocator();
         errdefer arena.deinit();
@@ -99,7 +99,7 @@ pub const Pool = struct {
         }
 
         for (0..connect_on_init_count) |i| {
-            conns[i] = try newConnection(pool, true);
+            conns[i] = try newConnection(pool, true, err_out);
             opened_connections += 1;
         }
 
@@ -187,7 +187,7 @@ pub const Pool = struct {
             conn.deinit();
             self._allocator.destroy(conn);
 
-            conn_to_add = newConnection(self, true) catch |err1| {
+            conn_to_add = newConnection(self, true, null) catch |err1| {
                 // we failed to create the connection, track it as missing and let
                 // the background reconnector try
                 self._mutex.lockUncancelable(io);
@@ -316,7 +316,7 @@ const Reconnector = struct {
                 return;
             }
 
-            const conn = newConnection(pool, false) catch {
+            const conn = newConnection(pool, false, null) catch {
                 std.Io.sleep(io, .fromNanoseconds(retry_delay), .awake) catch {};
                 self.mutex.lockUncancelable(io);
                 continue :loop;
@@ -358,7 +358,7 @@ const Reconnector = struct {
     }
 };
 
-fn newConnection(pool: *Pool, log_failure: bool) !*Conn {
+fn newConnection(pool: *Pool, log_failure: bool, err_out: ?*?[]const u8) !*Conn {
     const opts = &pool._opts;
     const allocator = pool._allocator;
     const io = pool._io;
@@ -376,6 +376,11 @@ fn newConnection(pool: *Pool, log_failure: bool) !*Conn {
     errdefer conn.deinit();
 
     conn.auth(opts.auth) catch |err| {
+        if (err_out) |out| {
+            if (conn.err) |pg_err| {
+                out.* = pool._allocator.dupe(u8, pg_err.message) catch null;
+            }
+        }
         if (log_failure) {
             if (conn.err) |pg_err| {
                 log.err("connect error: {s}", .{pg_err.message});
@@ -396,7 +401,7 @@ test "Pool" {
         .auth = t.authOpts(.{}),
         .connect = .{ .port = t.getTestPort() },
         .connect_on_init_count = 1,
-    });
+    }, null);
     defer pool.deinit();
 
     {
@@ -434,7 +439,7 @@ test "Pool: Release" {
             .username = "postgres",
             .password = "postgres",
         },
-    });
+    }, null);
     defer pool.deinit();
 
     const c1 = try pool.acquire();
@@ -447,7 +452,7 @@ test "Pool: stats" {
         .size = 3,
         .connect = .{ .port = t.getTestPort() },
         .auth = t.authOpts(.{}),
-    });
+    }, null);
     defer pool.deinit();
 
     // Initial state: all connections available
@@ -501,7 +506,7 @@ test "Pool: stats" {
 }
 
 test "Pool: exec" {
-    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) });
+    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) }, null);
     defer pool.deinit();
 
     {
@@ -517,7 +522,7 @@ test "Pool: exec" {
 }
 
 test "Pool: Query/Row" {
-    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) });
+    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) }, null);
     defer pool.deinit();
 
     {
@@ -550,7 +555,7 @@ test "Pool: Query/Row" {
 }
 
 test "Pool: Row error" {
-    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) });
+    var pool = try Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) }, null);
     defer pool.deinit();
 
     _ = try pool.rowUnsafe("insert into all_types (id) values ($1)", .{200});

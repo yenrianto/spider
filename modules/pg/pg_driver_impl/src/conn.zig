@@ -1875,7 +1875,7 @@ test "PG: eager error" {
 
 // https://github.com/karlseguin/pg.zig/issues/44
 test "PG: eager error conn state" {
-    var pool = try lib.Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) });
+    var pool = try lib.Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) }, null);
     defer pool.deinit();
 
     {
@@ -1898,7 +1898,7 @@ test "PG: eager error conn state" {
 
 // https://github.com/karlseguin/pg.zig/issues/45
 test "PG: rollback during error" {
-    var pool = try lib.Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) });
+    var pool = try lib.Pool.init(t.io, t.allocator, .{ .size = 1, .connect = .{ .port = t.getTestPort() }, .auth = t.authOpts(.{}) }, null);
     defer pool.deinit();
 
     _ = try pool.exec("truncate table all_types", .{});

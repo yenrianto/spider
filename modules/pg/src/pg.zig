@@ -90,10 +90,19 @@ pub fn init(allocator: std.mem.Allocator, io: std.Io, overrides: DbConfig) !void
         },
     };
 
+    var pg_err_msg: ?[]const u8 = null;
+    defer if (pg_err_msg) |msg| allocator.free(msg);
+
     var attempt: usize = 0;
     var delay_ms: i64 = 1000;
     while (attempt < 5) : (attempt += 1) {
-        db_pool = pg_lib.Pool.init(io, allocator, opts) catch |err| {
+        db_pool = pg_lib.Pool.init(io, allocator, opts, &pg_err_msg) catch |err| {
+            if (err == error.PG) {
+                if (pg_err_msg) |msg| {
+                    std.log.err("pg: {s}", .{msg});
+                }
+                return err;
+            }
             if (attempt < 4) {
                 std.log.warn("pg: connect attempt {d}/5 failed, retrying in {d}ms", .{ attempt + 1, delay_ms });
                 try std.Io.sleep(io, std.Io.Duration.fromMilliseconds(delay_ms), .real);

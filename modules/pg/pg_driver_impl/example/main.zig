@@ -20,7 +20,7 @@ pub fn main(init: std.process.Init) !void {
         .username = "postgres",
         .database = "postgres",
         .timeout = 10_000,
-    } }) catch |err| {
+    } }, null) catch |err| {
         log.err("Failed to connect: {}", .{err});
         std.process.exit(1);
     };

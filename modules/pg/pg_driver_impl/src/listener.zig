@@ -223,7 +223,7 @@ test "Listener: from Pool" {
         .size = 1,
         .connect = .{ .port = t.getTestPort() },
         .auth = t.authOpts(.{}),
-    });
+    }, null);
     defer pool.deinit();
 
     var l = try pool.newListener();
