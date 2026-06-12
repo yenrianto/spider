@@ -65,13 +65,27 @@ pub const JwksAuth = struct {
         var res = try pacman.get(self.io, self.allocator, self.config.jwks_url, .{});
         defer res.deinit();
 
-        const parsed = try res.json(struct {
+        if (res.status != .ok) {
+            std.debug.print(
+                "[spider] JWKS fetch failed: status={s}, url={s}\n  body: {s}\n",
+                .{ @tagName(res.status), self.config.jwks_url, res.body_text },
+            );
+            return error.JwksFetchFailed;
+        }
+
+        const parsed = res.json(struct {
             keys: []const struct {
                 kid: []const u8,
                 n: []const u8,
                 e: []const u8,
             },
-        });
+        }) catch |err| {
+            std.debug.print(
+                "[spider] JWKS response parse failed: {s}\n  url: {s}\n  body: {s}\n",
+                .{ @errorName(err), self.config.jwks_url, res.body_text },
+            );
+            return error.JwksFetchFailed;
+        };
         defer parsed.deinit();
 
         var iter = self.keys.iterator();

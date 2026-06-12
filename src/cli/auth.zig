@@ -2,11 +2,16 @@ const std = @import("std");
 const template_engine = @import("template_engine.zig");
 const fs_utils = @import("fs_utils.zig");
 const mod_updater = @import("mod_updater.zig");
+const migration_updater = @import("migration_updater.zig");
 const auth_updater = @import("auth_updater.zig");
 
 const mod_tmpl = @embedFile("templates/auth/mod.zig.template");
-const controller_tmpl = @embedFile("templates/auth/controller.zig.template");
-const login_html_tmpl = @embedFile("templates/auth/login.html.template");
+const controller_sqlite_tmpl = @embedFile("templates/auth/controller.zig.sqlite.template");
+const controller_pg_tmpl = @embedFile("templates/auth/controller.zig.pg.template");
+const migration_sql_sqlite_tmpl = @embedFile("templates/auth/migration.sql.sqlite.template");
+const migration_sql_pg_tmpl = @embedFile("templates/auth/migration.sql.pg.template");
+const migrations_zig_sqlite_tmpl = @embedFile("templates/migrations.zig.sqlite.template");
+const migrations_zig_pg_tmpl = @embedFile("templates/migrations.zig.pg.template");
 
 const keycloak_config =
     \\        .base_url      = spider.env.getOr("KEYCLOAK_BASE_URL", ""),
@@ -43,6 +48,18 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, provider: []const u8) !void
 
     std.debug.print("Generating auth feature with provider '{s}'...\n", .{provider});
 
+    // Detect db module — follows same pattern as feature.zig
+    const db_module = detectDbModule(io, allocator, root_dir) catch |err| blk: {
+        std.debug.print("warning: could not detect database module, defaulting to sqlite: {}\n", .{err});
+        break :blk try allocator.dupe(u8, "sqlite");
+    };
+    defer allocator.free(db_module);
+
+    // Select templates based on db module
+    const controller_tmpl = if (std.mem.eql(u8, db_module, "pg")) controller_pg_tmpl else controller_sqlite_tmpl;
+    const migration_sql_tmpl = if (std.mem.eql(u8, db_module, "pg")) migration_sql_pg_tmpl else migration_sql_sqlite_tmpl;
+    const migrations_zig_tmpl = if (std.mem.eql(u8, db_module, "pg")) migrations_zig_pg_tmpl else migrations_zig_sqlite_tmpl;
+
     // Create features/auth/ directory
     var features_dir = root_dir.openDir(io, "src/features", .{}) catch |err| {
         std.debug.print("error: 'src/features' directory not found. Are you in a Spider project?\n", .{});
@@ -61,29 +78,62 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, provider: []const u8) !void
     var auth_dir = try features_dir.openDir(io, "auth", .{});
     defer auth_dir.close(io);
 
-    try auth_dir.createDir(io, "views", .default_dir);
-
     // Write mod.zig
     const mod_content = try template_engine.renderTemplateWithVars(allocator, mod_tmpl, &vars);
     defer allocator.free(mod_content);
     try fs_utils.writeFile(io, auth_dir, "mod.zig", mod_content);
     std.debug.print("  create  src/features/auth/mod.zig\n", .{});
 
-    // Write controller.zig
+    // Write controller.zig — db-variant template
     const controller_content = try template_engine.renderTemplateWithVars(allocator, controller_tmpl, &vars);
     defer allocator.free(controller_content);
     try fs_utils.writeFile(io, auth_dir, "controller.zig", controller_content);
     std.debug.print("  create  src/features/auth/controller.zig\n", .{});
 
-    // Write views/login.html
-    const login_html_content = try template_engine.renderTemplateWithVars(allocator, login_html_tmpl, &vars);
-    defer allocator.free(login_html_content);
-    try fs_utils.writeFile(io, auth_dir, "views/login.html", login_html_content);
-    std.debug.print("  create  src/features/auth/views/login.html\n", .{});
+    // No login.html — auth provider (keycloak/google) handles login page
 
     // Update features/mod.zig
     try mod_updater.updateFeaturesMod(io, allocator, features_dir, "auth");
     std.debug.print("  update  src/features/mod.zig\n", .{});
+
+    // Generate migration
+    const timestamp = migration_updater.generateTimestamp(io);
+    const migration_name = try std.fmt.allocPrint(allocator, "{d}_create_users.sql", .{timestamp});
+    defer allocator.free(migration_name);
+
+    const migration_content = try template_engine.renderTemplateWithVars(allocator, migration_sql_tmpl, &vars);
+    defer allocator.free(migration_content);
+
+    const migration_path = try std.fmt.allocPrint(allocator, "src/core/db/migrations/{s}", .{migration_name});
+    defer allocator.free(migration_path);
+    try fs_utils.writeFile(io, root_dir, migration_path, migration_content);
+    std.debug.print("  create  {s}\n", .{migration_path});
+
+    // Update src/core/db/migrations.zig
+    try migration_updater.updateMigrationsZig(io, allocator, root_dir, timestamp, "users", migrations_zig_tmpl);
+    std.debug.print("  update  src/core/db/migrations.zig\n", .{});
+
+    // Ensure src/core/db/mod.zig exists and exports migrations
+    {
+        const db_mod_content = root_dir.readFileAlloc(io, "src/core/db/mod.zig", allocator, .limited(256)) catch "";
+        defer if (db_mod_content.len > 0) allocator.free(db_mod_content);
+        if (db_mod_content.len == 0 or std.mem.indexOf(u8, db_mod_content, "pub const migrations") == null) {
+            try fs_utils.writeFile(io, root_dir, "src/core/db/mod.zig", "pub const migrations = @import(\"migrations.zig\");\n");
+            std.debug.print("  create  src/core/db/mod.zig\n", .{});
+        }
+    }
+
+    // Ensure src/core/mod.zig has pub const db = ...
+    {
+        const core_mod_content = try root_dir.readFileAlloc(io, "src/core/mod.zig", allocator, .limited(4096));
+        defer allocator.free(core_mod_content);
+        if (std.mem.indexOf(u8, core_mod_content, "pub const db") == null) {
+            const updated = try std.mem.concat(allocator, u8, &.{ core_mod_content, "pub const db = @import(\"db/mod.zig\");\n" });
+            defer allocator.free(updated);
+            try fs_utils.writeFile(io, root_dir, "src/core/mod.zig", updated);
+            std.debug.print("  update  src/core/mod.zig\n", .{});
+        }
+    }
 
     // Select provider config
     const provider_config = if (std.mem.eql(u8, provider, "keycloak")) keycloak_config else google_config;
@@ -92,19 +142,41 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, provider: []const u8) !void
     try auth_updater.updateMainZig(io, allocator, root_dir, provider, provider_config);
     std.debug.print("  update  src/main.zig\n", .{});
 
-    std.debug.print("\nDone! Auth feature with {s} provider generated.\n", .{provider});
-    std.debug.print("\nAdd these environment variables to your .env file:\n", .{});
+    // Append env vars to .env.example
     if (std.mem.eql(u8, provider, "keycloak")) {
-        std.debug.print("  KEYCLOAK_BASE_URL=http://localhost:8080\n", .{});
-        std.debug.print("  KEYCLOAK_REALM=myrealm\n", .{});
-        std.debug.print("  KEYCLOAK_CLIENT_ID=spider-app\n", .{});
-        std.debug.print("  KEYCLOAK_CLIENT_SECRET=your-client-secret\n", .{});
-        std.debug.print("  KEYCLOAK_REDIRECT_URI=http://localhost:3000/auth/callback\n", .{});
-        std.debug.print("  KEYCLOAK_REDIRECT_URI_LOGOUT=http://localhost:3000\n", .{});
-    } else {
-        std.debug.print("  GOOGLE_CLIENT_ID=your-client-id\n", .{});
-        std.debug.print("  GOOGLE_CLIENT_SECRET=your-client-secret\n", .{});
-        std.debug.print("  GOOGLE_REDIRECT_URI=http://localhost:3000/auth/callback\n", .{});
+        const env_example_path = ".env.example";
+        const env_vars =
+            "\n# Keycloak\n" ++
+            "KEYCLOAK_BASE_URL=http://localhost:8080\n" ++
+            "KEYCLOAK_REALM=myrealm\n" ++
+            "KEYCLOAK_CLIENT_ID=spider-app\n" ++
+            "KEYCLOAK_CLIENT_SECRET=your-client-secret\n" ++
+            "KEYCLOAK_REDIRECT_URI=http://localhost:3000/auth/callback\n" ++
+            "KEYCLOAK_REDIRECT_URI_LOGOUT=http://localhost:3000\n" ++
+            "JWT_SECRET=change-me-in-production\n";
+
+        const existing = root_dir.readFileAlloc(io, env_example_path, allocator, .limited(16 * 1024)) catch "";
+        defer if (existing.len > 0) allocator.free(existing);
+
+        if (std.mem.indexOf(u8, existing, "KEYCLOAK_") == null) {
+            const new_content = try std.mem.concat(allocator, u8, &.{ existing, env_vars });
+            defer allocator.free(new_content);
+            try fs_utils.writeFile(io, root_dir, env_example_path, new_content);
+            std.debug.print("  update  .env.example\n", .{});
+        }
     }
-    std.debug.print("  JWT_SECRET=change-me-in-production\n", .{});
+
+    std.debug.print("\nDone! Auth feature with {s} provider generated.\n", .{provider});
+}
+
+fn detectDbModule(io: std.Io, allocator: std.mem.Allocator, root_dir: std.Io.Dir) ![]const u8 {
+    const main_content = root_dir.readFileAlloc(io, "src/main.zig", allocator, .limited(32 * 1024)) catch {
+        return allocator.dupe(u8, "sqlite");
+    };
+    defer allocator.free(main_content);
+
+    if (std.mem.indexOf(u8, main_content, "spider.pg") != null) {
+        return allocator.dupe(u8, "pg");
+    }
+    return allocator.dupe(u8, "sqlite");
 }

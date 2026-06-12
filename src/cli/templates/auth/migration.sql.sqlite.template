@@ -1,0 +1,18 @@
+-- migrate:up
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    keycloak_id TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL,
+    full_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TRIGGER IF NOT EXISTS users_set_updated_at
+AFTER UPDATE ON users
+FOR EACH ROW
+BEGIN
+    UPDATE users SET updated_at = datetime('now') WHERE id = NEW.id;
+END;
+-- migrate:down
+DROP TRIGGER IF EXISTS users_set_updated_at;
+DROP TABLE IF EXISTS users;

@@ -1,6 +1,30 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
+var auto_loaded = false;
+
+fn ensureLoaded() void {
+    if (!auto_loaded) {
+        auto_loaded = true;
+        loadFile(std.heap.page_allocator, ".env", false) catch {};
+        const spider_env = getInternal("SPIDER_ENV") orelse "development";
+        var env_buf: [64]u8 = undefined;
+        const env_file = std.fmt.bufPrint(&env_buf, ".env.{s}", .{spider_env}) catch return;
+        loadFile(std.heap.page_allocator, env_file, true) catch {};
+        loadFile(std.heap.page_allocator, ".env.local", true) catch {};
+    }
+}
+
+fn getInternal(key: []const u8) ?[]const u8 {
+    const getenv = struct {
+        extern fn getenv(name: [*:0]const u8) ?[*:0]const u8;
+    }.getenv;
+    const key_z = std.heap.page_allocator.dupeSentinel(u8, key, 0) catch return null;
+    defer std.heap.page_allocator.free(key_z);
+    const val = getenv(key_z.ptr) orelse return null;
+    return std.heap.page_allocator.dupe(u8, std.mem.sliceTo(val, 0)) catch null;
+}
+
 fn setEnvVarNative(name: [*:0]const u8, value: [*:0]const u8, overwrite: bool) void {
     if (builtin.os.tag == .windows) {
         const _putenv_s = struct {
@@ -17,6 +41,7 @@ fn setEnvVarNative(name: [*:0]const u8, value: [*:0]const u8, overwrite: bool) v
 }
 
 pub fn get(key: []const u8) ?[]const u8 {
+    ensureLoaded();
     const getenv = struct {
         extern fn getenv(name: [*:0]const u8) ?[*:0]const u8;
     }.getenv;
@@ -27,6 +52,7 @@ pub fn get(key: []const u8) ?[]const u8 {
 }
 
 pub fn getOr(key: []const u8, default: []const u8) []const u8 {
+    ensureLoaded();
     return get(key) orelse default;
 }
 
