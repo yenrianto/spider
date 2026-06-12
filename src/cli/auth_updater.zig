@@ -27,6 +27,7 @@ pub fn updateMainZig(
     root_dir: std.Io.Dir,
     provider: []const u8,
     provider_config: []const u8,
+    api: bool,
 ) !void {
     const main_path = "src/main.zig";
 
@@ -73,17 +74,19 @@ pub fn updateMainZig(
     }
 
     // 5. Add "const auth = features.auth;" after "const home = features.home;"
-    const import_marker = "const home = features.home;\n";
-    if (std.mem.indexOf(u8, result, import_marker)) |pos| {
-        const auth_import = "const auth = features.auth;\n";
-        const insert_pos = pos + import_marker.len;
-        const r = try std.mem.concat(allocator, u8, &.{
-            result[0..insert_pos],
-            auth_import,
-            result[insert_pos..],
-        });
-        allocator.free(result);
-        result = r;
+    if (!api) {
+        const import_marker = "const home = features.home;\n";
+        if (std.mem.indexOf(u8, result, import_marker)) |pos| {
+            const auth_import = "const auth = features.auth;\n";
+            const insert_pos = pos + import_marker.len;
+            const r = try std.mem.concat(allocator, u8, &.{
+                result[0..insert_pos],
+                auth_import,
+                result[insert_pos..],
+            });
+            allocator.free(result);
+            result = r;
+        }
     }
 
     // 6. Add provider init block before "var server = spider.app(.{});"
@@ -112,15 +115,22 @@ pub fn updateMainZig(
 
     // 7. Add middleware + auth routes before ".get(\"/\", home.index)"
     const routes_marker = ".get(\"/\", home.index)";
-    const auth_routes = try std.fmt.allocPrint(
-        allocator,
-        "        .use({s}_auth.middleware())\n" ++
-            "        .get(\"/auth/login\", {s}_auth.loginHandler())\n" ++
-            "        .get(\"/auth/callback\", {s}_auth.callbackHandler())\n" ++
-            "        .get(\"/auth/session\", auth.controller.session)\n" ++
-            "        .get(\"/auth/logout\", auth.controller.logout)\n",
-        .{ provider, provider, provider },
-    );
+    const auth_routes = if (api)
+        try std.fmt.allocPrint(
+            allocator,
+            "        .use({s}_auth.middleware())\n",
+            .{provider},
+        )
+    else
+        try std.fmt.allocPrint(
+            allocator,
+            "        .use({s}_auth.middleware())\n" ++
+                "        .get(\"/auth/login\", {s}_auth.loginHandler())\n" ++
+                "        .get(\"/auth/callback\", {s}_auth.callbackHandler())\n" ++
+                "        .get(\"/auth/session\", auth.controller.session)\n" ++
+                "        .get(\"/auth/logout\", auth.controller.logout)\n",
+            .{ provider, provider, provider },
+        );
     defer allocator.free(auth_routes);
 
     if (std.mem.indexOf(u8, result, routes_marker)) |pos| {

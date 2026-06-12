@@ -21,7 +21,7 @@ const usage =
     \\  spider generate <subcommand>   Generate code (aliases: g)
     \\  spider g <subcommand>          Alias for generate
     \\    feature <name> [--api]        Generate a new feature (--api for REST API)
-    \\    auth [--provider=keycloak|google]  Generate auth feature
+    \\    auth [--provider=keycloak|google] [--api]  Generate auth feature (--api for bearer-only)
     \\  spider generate-vapid           Generate VAPID keys for Web Push
     \\  spider install                 Download frontend assets (tailwindcss, alpine, htmx, icons)
     \\  spider migrate                 Run pending database migrations
@@ -80,7 +80,7 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("Usage: spider g <subcommand>\n", .{});
             std.debug.print("Available subcommands:\n", .{});
             std.debug.print("  feature <name> [--api]    Generate a new feature (--api for REST API)\n", .{});
-            std.debug.print("  auth [--provider=keycloak|google]  Generate auth feature\n", .{});
+            std.debug.print("  auth [--provider=keycloak|google] [--api]  Generate auth feature (--api for bearer-only)\n", .{});
             return;
         };
         try generate.run(io, allocator, subcommand, &args);
