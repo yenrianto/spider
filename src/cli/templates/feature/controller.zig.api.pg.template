@@ -1,0 +1,39 @@
+const std = @import("std");
+const spider = @import("spider");
+const model = @import("model.zig");
+const repository = @import("repository.zig");
+
+pub fn index(c: *spider.Ctx) !spider.Response {
+    const items = try repository.findAll(c.arena);
+    return c.json(items, .{});
+}
+
+pub fn show(c: *spider.Ctx) !spider.Response {
+    const id_str = c.params.get("id") orelse return error.NotFound;
+    const id = try std.fmt.parseInt(i64, id_str, 10);
+    const item = try repository.findById(c.arena, id) orelse
+        return c.json(.{ .@"error" = "not found" }, .{ .status = .not_found });
+    return c.json(item, .{});
+}
+
+pub fn create(c: *spider.Ctx) !spider.Response {
+    const input = try c.bodyJson(model.CreateInput);
+    const item = try repository.create(c.arena, input);
+    return c.json(item, .{ .status = .created });
+}
+
+pub fn update(c: *spider.Ctx) !spider.Response {
+    const id_str = c.params.get("id") orelse return error.NotFound;
+    const id = try std.fmt.parseInt(i64, id_str, 10);
+    const input = try c.bodyJson(model.UpdateInput);
+    const item = try repository.update(c.arena, id, input) orelse
+        return c.json(.{ .@"error" = "not found" }, .{ .status = .not_found });
+    return c.json(item, .{});
+}
+
+pub fn delete(c: *spider.Ctx) !spider.Response {
+    const id_str = c.params.get("id") orelse return error.NotFound;
+    const id = try std.fmt.parseInt(i64, id_str, 10);
+    try repository.delete(c.arena, id);
+    return c.json(.{}, .{ .status = .no_content });
+}

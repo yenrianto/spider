@@ -7,6 +7,7 @@ pub fn updateMainZig(
     root_dir: std.Io.Dir,
     feature: []const u8,
     plural: []const u8,
+    api: bool,
 ) !void {
     const main_path = "src/main.zig";
 
@@ -39,26 +40,43 @@ pub fn updateMainZig(
     });
     defer allocator.free(with_import);
 
-    // 2. Add all CRUD routes before .listen(
-    // Includes GET routes for index, newForm, edit
-    // and POST routes for create, update, delete
-    const routes = try std.fmt.allocPrint(
-        allocator,
-        "        .get(\"/{s}\", {s}.controller.index)\n" ++
-            "        .get(\"/{s}/new\", {s}.controller.newForm)\n" ++
-            "        .get(\"/{s}/:id/edit\", {s}.controller.edit)\n" ++
-            "        .post(\"/{s}/create\", {s}.controller.create)\n" ++
-            "        .post(\"/{s}/:id/update\", {s}.controller.update)\n" ++
-            "        .post(\"/{s}/:id/delete\", {s}.controller.delete)\n",
-        .{
-            plural, feature,
-            plural, feature,
-            plural, feature,
-            plural, feature,
-            plural, feature,
-            plural, feature,
-        },
-    );
+    // 2. Add CRUD routes before .listen(
+    // SSR mode: GET index, new, edit + POST create, update, delete
+    // API mode: GET index, show + POST create + PATCH update + DELETE delete
+    const routes = if (api)
+        try std.fmt.allocPrint(
+            allocator,
+            "        .get(\"/{s}\", {s}.controller.index)\n" ++
+                "        .get(\"/{s}/:id\", {s}.controller.show)\n" ++
+                "        .post(\"/{s}\", {s}.controller.create)\n" ++
+                "        .patch(\"/{s}/:id\", {s}.controller.update)\n" ++
+                "        .delete(\"/{s}/:id\", {s}.controller.delete)\n",
+            .{
+                plural, feature,
+                plural, feature,
+                plural, feature,
+                plural, feature,
+                plural, feature,
+            },
+        )
+    else
+        try std.fmt.allocPrint(
+            allocator,
+            "        .get(\"/{s}\", {s}.controller.index)\n" ++
+                "        .get(\"/{s}/new\", {s}.controller.newForm)\n" ++
+                "        .get(\"/{s}/:id/edit\", {s}.controller.edit)\n" ++
+                "        .post(\"/{s}/create\", {s}.controller.create)\n" ++
+                "        .post(\"/{s}/:id/update\", {s}.controller.update)\n" ++
+                "        .post(\"/{s}/:id/delete\", {s}.controller.delete)\n",
+            .{
+                plural, feature,
+                plural, feature,
+                plural, feature,
+                plural, feature,
+                plural, feature,
+                plural, feature,
+            },
+        );
     defer allocator.free(routes);
 
     // Find .listen( marker to insert routes just before it

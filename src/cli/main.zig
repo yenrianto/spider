@@ -20,7 +20,7 @@ const usage =
     \\    --pg                         Use PostgreSQL instead of default SQLite
     \\  spider generate <subcommand>   Generate code (aliases: g)
     \\  spider g <subcommand>          Alias for generate
-    \\    feature <name>                Generate a new feature
+    \\    feature <name> [--api]        Generate a new feature (--api for REST API)
     \\    auth [--provider=keycloak|google]  Generate auth feature
     \\  spider generate-vapid           Generate VAPID keys for Web Push
     \\  spider install                 Download frontend assets (tailwindcss, alpine, htmx, icons)
@@ -79,7 +79,7 @@ pub fn main(init: std.process.Init) !void {
         const subcommand = args.next() orelse {
             std.debug.print("Usage: spider g <subcommand>\n", .{});
             std.debug.print("Available subcommands:\n", .{});
-            std.debug.print("  feature <name>    Generate a new feature\n", .{});
+            std.debug.print("  feature <name> [--api]    Generate a new feature (--api for REST API)\n", .{});
             std.debug.print("  auth [--provider=keycloak|google]  Generate auth feature\n", .{});
             return;
         };
