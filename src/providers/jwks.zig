@@ -22,6 +22,7 @@ pub const JwksConfig = struct {
     after_callback_path: []const u8 = "/",
     auth_skip_paths: []const []const u8 = &.{},
     refresh_path: ?[]const u8 = null,
+    api_mode: bool = false,
 };
 
 pub const Claims = struct {
@@ -191,8 +192,12 @@ pub const JwksAuth = struct {
                 return next(c);
         }
 
-        const token = extractToken(c, self.config.cookie_name) orelse
+        const token = extractToken(c, self.config.cookie_name) orelse {
+            if (self.config.api_mode) {
+                return c.json(.{ .@"error" = "unauthorized", .@"message" = "Bearer token required" }, .{ .status = .unauthorized });
+            }
             return redirect(c, self.config.login_path);
+        };
 
         const claims = self.verifyToken(c.arena, token) catch |err| switch (err) {
             error.InvalidToken,
@@ -210,6 +215,9 @@ pub const JwksAuth = struct {
             1_000_000_000,
         ));
         if (claims.exp < now_sec) {
+            if (self.config.api_mode) {
+                return c.json(.{ .@"error" = "unauthorized", .@"message" = "Token expired" }, .{ .status = .unauthorized });
+            }
             if (self.config.refresh_path) |rpath| {
                 // HTMX and SSE requests must receive 401 — a 302 on HTMX loses the
                 // original method/body, and on SSE it triggers competing OAuth flows
