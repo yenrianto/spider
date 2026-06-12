@@ -206,8 +206,18 @@ pub const JwksAuth = struct {
             error.MissingIssuer,
             error.UnsupportedKeySize,
             error.InvalidSignature,
-            => return c.text(@errorName(err), .{ .status = .unauthorized }),
-            else => |e| return c.text(@errorName(e), .{ .status = .unauthorized }),
+            => {
+                if (self.config.api_mode) {
+                    return c.json(.{ .@"error" = "unauthorized", .@"message" = @errorName(err) }, .{ .status = .unauthorized });
+                }
+                return c.text(@errorName(err), .{ .status = .unauthorized });
+            },
+            else => |e| {
+                if (self.config.api_mode) {
+                    return c.json(.{ .@"error" = "unauthorized", .@"message" = @errorName(e) }, .{ .status = .unauthorized });
+                }
+                return c.text(@errorName(e), .{ .status = .unauthorized });
+            },
         };
 
         const now_sec: i64 = @intCast(@divFloor(
