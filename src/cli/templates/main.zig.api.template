@@ -1,0 +1,22 @@
+const std = @import("std");
+const spider = @import("spider");
+const features = @import("features");
+const Response = spider.Response;
+
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.arena.allocator();
+    const io = init.io;
+    _ = allocator;
+    _ = io;
+
+    var server = spider.app(.{});
+    defer server.deinit();
+
+    server
+        .onError(errorHandler)
+        .listen(.{ .port = 3000, .host = "0.0.0.0" }) catch |err| return err;
+}
+
+fn errorHandler(c: *spider.Ctx, err: anyerror) !Response {
+    return c.json(.{ .@"error" = @errorName(err) }, .{ .status = .internal_server_error });
+}

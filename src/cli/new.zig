@@ -31,6 +31,9 @@ const build_zig_pg_tmpl = @embedFile("templates/build.zig.pg.template");
 const build_zig_sqlite_tmpl = @embedFile("templates/build.zig.sqlite.template");
 const main_zig_pg_tmpl = @embedFile("templates/main.zig.pg.template");
 const main_zig_sqlite_tmpl = @embedFile("templates/main.zig.sqlite.template");
+const main_zig_api_tmpl = @embedFile("templates/main.zig.api.template");
+const main_zig_api_sqlite_tmpl = @embedFile("templates/main.zig.api.sqlite.template");
+const build_zig_api_tmpl = @embedFile("templates/build.zig.api.template");
 const migrations_zig_sqlite_tmpl = @embedFile("templates/migrations.zig.sqlite.template");
 const migrations_zig_pg_tmpl = @embedFile("templates/migrations.zig.pg.template");
 
@@ -76,12 +79,14 @@ fn readFingerprint(io: std.Io, allocator: std.mem.Allocator, dir: std.Io.Dir) ![
     return extractFingerprint(allocator, content);
 }
 
-fn render(allocator: std.mem.Allocator, tmpl: []const u8, app_name: []const u8, fingerprint: []const u8, db_module: []const u8) ![]const u8 {
+fn render(allocator: std.mem.Allocator, tmpl: []const u8, app_name: []const u8, fingerprint: []const u8, db_module: []const u8, sqlite_enabled: []const u8) ![]const u8 {
     const step1 = try std.mem.replaceOwned(u8, allocator, tmpl, "{{app_name}}", app_name);
     defer allocator.free(step1);
     const step2 = try std.mem.replaceOwned(u8, allocator, step1, "{{fingerprint}}", fingerprint);
     defer allocator.free(step2);
-    return std.mem.replaceOwned(u8, allocator, step2, "{{db_module}}", db_module);
+    const step3 = try std.mem.replaceOwned(u8, allocator, step2, "{{db_module}}", db_module);
+    defer allocator.free(step3);
+    return std.mem.replaceOwned(u8, allocator, step3, "{{sqlite_enabled}}", sqlite_enabled);
 }
 
 fn writeFile(io: std.Io, dir: std.Io.Dir, path: []const u8, content: []const u8) !void {
@@ -94,6 +99,14 @@ fn writeFile(io: std.Io, dir: std.Io.Dir, path: []const u8, content: []const u8)
     var writer: std.Io.File.Writer = .init(file, io, &buf);
     try writer.interface.writeAll(content);
     try writer.interface.flush();
+}
+
+fn isApiSkipped(path: []const u8) bool {
+    return std.mem.eql(u8, path, "src/styles.css") or
+        std.mem.eql(u8, path, "src/embedded_templates.zig") or
+        std.mem.startsWith(u8, path, "src/features/home/") or
+        std.mem.startsWith(u8, path, "src/shared/templates/") or
+        std.mem.eql(u8, path, "public/js/stores.js");
 }
 
 pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_daisyui: bool, skip_downloads: bool, api_only: bool, no_db: bool, use_pg: bool) !void {
@@ -123,8 +136,8 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     const zig_version = std.mem.trim(u8, zig_result.stdout, " \n\r\t");
     std.debug.print("Using Zig: {s}\n", .{zig_version});
 
-    // --api implies no database and no asset downloads
-    const effective_no_db = no_db or api_only;
+    // --api skips frontend assets; --api does not force no-db
+    const effective_no_db = no_db;
     const effective_skip = skip_downloads or api_only;
 
     const cwd = std.Io.Dir.cwd();
@@ -180,9 +193,12 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
 
     const selected_layout_tmpl = if (use_daisyui) layout_daisyui_html_tmpl else layout_html_tmpl;
     const selected_home_index_tmpl = if (use_daisyui) home_daisyui_index_tmpl else home_index_tmpl;
-    const selected_build_zig_tmpl = if (effective_no_db) build_zig_tmpl else if (use_pg) build_zig_pg_tmpl else build_zig_sqlite_tmpl;
-    const selected_main_zig_tmpl = if (effective_no_db) main_zig_tmpl else if (use_pg) main_zig_pg_tmpl else main_zig_sqlite_tmpl;
+    const selected_build_zig_tmpl = if (api_only) build_zig_api_tmpl else if (effective_no_db) build_zig_tmpl else if (use_pg) build_zig_pg_tmpl else build_zig_sqlite_tmpl;
+    const selected_main_zig_tmpl = if (api_only and effective_no_db) main_zig_api_tmpl else if (api_only) main_zig_api_sqlite_tmpl else if (effective_no_db) main_zig_tmpl else if (use_pg) main_zig_pg_tmpl else main_zig_sqlite_tmpl;
     const selected_env_example_tmpl = if (effective_no_db or !use_pg) env_example_tmpl else env_example_pg_tmpl;
+
+    // For API projects, use sqlite_enabled flag in build.zig.api.template
+    const sqlite_enabled = if (api_only and !no_db) "true" else "false";
 
     const files = .{
         .{ "build.zig", selected_build_zig_tmpl },
@@ -215,35 +231,55 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
     };
 
     current_step = "write files";
-    inline for (files) |f| {
-        const path = f[0];
-        const tmpl = f[1];
-        const content = render(allocator, tmpl, app_name, fingerprint, "") catch |err| {
-            fail_err = err;
-            return err;
-        };
-        defer allocator.free(content);
-        writeFile(io, project_dir, path, content) catch |err| {
-            fail_err = err;
-            return err;
-        };
-        std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
+    if (api_only) {
+        inline for (files) |f| {
+            const path = f[0];
+            const tmpl = f[1];
+            if (comptime isApiSkipped(path)) continue;
+            const content = render(allocator, tmpl, app_name, fingerprint, "", sqlite_enabled) catch |err| {
+                fail_err = err;
+                return err;
+            };
+            defer allocator.free(content);
+            writeFile(io, project_dir, path, content) catch |err| {
+                fail_err = err;
+                return err;
+            };
+            std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
+        }
+    } else {
+        inline for (files) |f| {
+            const path = f[0];
+            const tmpl = f[1];
+            const content = render(allocator, tmpl, app_name, fingerprint, "", sqlite_enabled) catch |err| {
+                fail_err = err;
+                return err;
+            };
+            defer allocator.free(content);
+            writeFile(io, project_dir, path, content) catch |err| {
+                fail_err = err;
+                return err;
+            };
+            std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
+        }
     }
 
-    inline for (static_assets) |f| {
-        const path = f[0];
-        const content = f[1];
-        writeFile(io, project_dir, path, content) catch |err| {
-            fail_err = err;
-            return err;
-        };
-        std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
+    if (!api_only) {
+        inline for (static_assets) |f| {
+            const path = f[0];
+            const content = f[1];
+            writeFile(io, project_dir, path, content) catch |err| {
+                fail_err = err;
+                return err;
+            };
+            std.debug.print("  create  {s}/{s}\n", .{ app_name, path });
+        }
     }
 
     if (!effective_no_db) {
         const db_module = if (use_pg) "pg" else "sqlite";
         const selected_migrations_tmpl = if (use_pg) migrations_zig_pg_tmpl else migrations_zig_sqlite_tmpl;
-        const migrations_content = render(allocator, selected_migrations_tmpl, app_name, fingerprint, db_module) catch |err| {
+        const migrations_content = render(allocator, selected_migrations_tmpl, app_name, fingerprint, db_module, sqlite_enabled) catch |err| {
             fail_err = err;
             return err;
         };

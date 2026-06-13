@@ -1,0 +1,25 @@
+const std = @import("std");
+const spider = @import("spider");
+const features = @import("features");
+const Response = spider.Response;
+const db = spider.sqlite;
+const migrations = @import("core/db/migrations.zig");
+
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.arena.allocator();
+    const io = init.io;
+
+    try db.init(allocator, io, .{});
+    defer db.deinit();
+
+    var server = spider.app(.{});
+    defer server.deinit();
+
+    server
+        .onError(errorHandler)
+        .listen(.{ .port = 3000, .host = "0.0.0.0" }) catch |err| return err;
+}
+
+fn errorHandler(c: *spider.Ctx, err: anyerror) !Response {
+    return c.json(.{ .@"error" = @errorName(err) }, .{ .status = .internal_server_error });
+}
