@@ -15,6 +15,7 @@ const env_example_pg_tmpl = @embedFile("templates/.env.example.pg.template");
 const gitignore_tmpl = @embedFile("templates/.gitignore.template");
 const core_mod_tmpl = @embedFile("templates/core_mod.zig.template");
 const features_mod_tmpl = @embedFile("templates/features_mod.zig.template");
+const features_mod_api_tmpl = @embedFile("templates/features_mod.zig.api.template");
 const home_mod_tmpl = @embedFile("templates/home_mod.zig.template");
 const styles_css_tmpl = @embedFile("templates/styles.css.template");
 const nav_bar_tmpl = @embedFile("templates/nav-bar.html.template");
@@ -99,14 +100,6 @@ fn writeFile(io: std.Io, dir: std.Io.Dir, path: []const u8, content: []const u8)
     var writer: std.Io.File.Writer = .init(file, io, &buf);
     try writer.interface.writeAll(content);
     try writer.interface.flush();
-}
-
-fn isApiSkipped(path: []const u8) bool {
-    return std.mem.eql(u8, path, "src/styles.css") or
-        std.mem.eql(u8, path, "src/embedded_templates.zig") or
-        std.mem.startsWith(u8, path, "src/features/home/") or
-        std.mem.startsWith(u8, path, "src/shared/templates/") or
-        std.mem.eql(u8, path, "public/js/stores.js");
 }
 
 pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_daisyui: bool, skip_downloads: bool, api_only: bool, no_db: bool, use_pg: bool) !void {
@@ -232,10 +225,21 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, app_name: []const u8, use_d
 
     current_step = "write files";
     if (api_only) {
-        inline for (files) |f| {
+        const api_files = .{
+            .{ "build.zig", selected_build_zig_tmpl },
+            .{ "build.zig.zon", build_zon_tmpl },
+            .{ "spider.config.zig", spider_config_tmpl },
+            .{ "src/main.zig", selected_main_zig_tmpl },
+            .{ "src/core/mod.zig", core_mod_tmpl },
+            .{ "src/features/mod.zig", features_mod_api_tmpl },
+            .{ "Dockerfile", dockerfile_tmpl },
+            .{ "docker-compose.yml", docker_compose_tmpl },
+            .{ ".env.example", selected_env_example_tmpl },
+            .{ ".gitignore", gitignore_tmpl },
+        };
+        inline for (api_files) |f| {
             const path = f[0];
             const tmpl = f[1];
-            if (comptime isApiSkipped(path)) continue;
             const content = render(allocator, tmpl, app_name, fingerprint, "", sqlite_enabled) catch |err| {
                 fail_err = err;
                 return err;
