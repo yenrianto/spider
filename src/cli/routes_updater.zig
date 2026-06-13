@@ -26,13 +26,18 @@ pub fn updateMainZig(
     );
     defer allocator.free(import_line);
 
-    const import_marker = "const home = features.home;\n";
-    const after_imports = std.mem.indexOf(u8, existing, import_marker) orelse {
+    // Look for import marker — try home first (non-API), then features import (API)
+    const home_marker = "const home = features.home;\n";
+    const features_marker = "const features = @import(\"features\");\n";
+    const home_pos = std.mem.indexOf(u8, existing, home_marker);
+    const features_pos = std.mem.indexOf(u8, existing, features_marker);
+    const after_imports = home_pos orelse features_pos orelse {
         std.debug.print("warning: could not find import marker in main.zig\n", .{});
         return;
     };
 
-    const insert_pos = after_imports + import_marker.len;
+    const marker = if (home_pos != null) home_marker else features_marker;
+    const insert_pos = after_imports + marker.len;
     const with_import = try std.mem.concat(allocator, u8, &.{
         existing[0..insert_pos],
         import_line,
