@@ -159,7 +159,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, provider: []const u8, api: 
     std.debug.print("  update  src/main.zig\n", .{});
 
     // Append env vars to .env.example
-    if (!api and std.mem.eql(u8, provider, "keycloak")) {
+    if (std.mem.eql(u8, provider, "keycloak")) {
         const env_example_path = ".env.example";
         const env_vars =
             "\n# Keycloak\n" ++

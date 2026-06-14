@@ -114,7 +114,11 @@ pub fn updateMainZig(
     }
 
     // 7. Add middleware + auth routes before ".get(\"/\", home.index)"
-    const routes_marker = ".get(\"/\", home.index)";
+    // 7. Add middleware (+ auth routes for non-API) before first route or .onError(
+    //    Try .get("/", home.index) first (non-API), fall back to .onError( (API)
+    const home_route_marker = ".get(\"/\", home.index)";
+    const onerror_marker = ".onError(";
+    const routes_marker = if (std.mem.indexOf(u8, result, home_route_marker)) |_| home_route_marker else onerror_marker;
     const auth_routes = if (api)
         try std.fmt.allocPrint(
             allocator,
