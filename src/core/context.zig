@@ -409,6 +409,22 @@ pub const Ctx = struct {
         return self._sse_hub orelse @panic("sseHub: no SSE hub — use server.sse()");
     }
 
+    /// Retorna o org_id da primeira organization que o usuário tem a role especificada
+    pub fn getOrgByRole(self: *Ctx, role: []const u8) ?[]const u8 {
+        const count_str = self.params.get("_auth_orgs_count") orelse return null;
+        const count = std.fmt.parseInt(usize, count_str, 10) catch return null;
+        var i: usize = 0;
+        while (i < count) : (i += 1) {
+            const role_key = std.fmt.allocPrint(self.arena, "_auth_org_{d}_role", .{i}) catch return null;
+            const r = self.params.get(role_key) orelse continue;
+            if (std.mem.eql(u8, r, role)) {
+                const id_key = std.fmt.allocPrint(self.arena, "_auth_org_{d}_id", .{i}) catch return null;
+                return self.params.get(id_key);
+            }
+        }
+        return null;
+    }
+
     pub fn hasRole(self: *Ctx, role: []const u8) bool {
         const count_str = self.params.get("_auth_roles_count") orelse return false;
         const count = std.fmt.parseInt(usize, count_str, 10) catch return false;

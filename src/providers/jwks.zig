@@ -271,9 +271,61 @@ pub const JwksAuth = struct {
             try c.params.put(c.arena, "_auth_roles_count", count_str);
         }
 
+        if (extractToken(c, self.config.cookie_name)) |extracted| {
+            injectOrganizations(c, extracted) catch {};
+        }
+
         return next(c);
     }
 };
+
+fn injectOrganizations(c: *Ctx, token: []const u8) !void {
+    // Split JWT para re-decodificar o payload
+    var it = std.mem.splitScalar(u8, token, '.');
+    _ = it.next() orelse return; // skip header
+    const payload_b64 = it.next() orelse return;
+
+    const payload_len = try b64.Decoder.calcSizeForSlice(payload_b64);
+    const payload_buf = try c.arena.alloc(u8, payload_len);
+    try b64.Decoder.decode(payload_buf, payload_b64);
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, c.arena, payload_buf[0..payload_len], .{});
+    defer parsed.deinit();
+
+    const orgs = parsed.value.object.get("organizations") orelse return;
+
+    var i: usize = 0;
+    var org_iter = orgs.object.iterator();
+    while (org_iter.next()) |entry| {
+        const org_id = entry.key_ptr.*;
+        const org_val = entry.value_ptr.*;
+
+        const org_name = org_val.object.get("name") orelse continue;
+        const roles_val = org_val.object.get("roles") orelse continue;
+        const first_role = switch (roles_val) {
+            .string => |s| s,
+            .array => |arr| blk: {
+                if (arr.items.len == 0) continue;
+                break :blk arr.items[0].string;
+            },
+            else => continue,
+        };
+
+        const id_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_id", .{i});
+        try c.params.put(c.arena, id_key, try c.arena.dupe(u8, org_id));
+
+        const name_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_name", .{i});
+        try c.params.put(c.arena, name_key, try c.arena.dupe(u8, org_name.string));
+
+        const role_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_role", .{i});
+        try c.params.put(c.arena, role_key, try c.arena.dupe(u8, first_role));
+
+        i += 1;
+    }
+
+    const count_str = try std.fmt.allocPrint(c.arena, "{d}", .{i});
+    try c.params.put(c.arena, "_auth_orgs_count", count_str);
+}
 
 fn redirect(c: *Ctx, url: []const u8) Response {
     const headers = c.arena.alloc([2][]const u8, 1) catch
