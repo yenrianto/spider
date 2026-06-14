@@ -4,6 +4,10 @@ const Io = std.Io;
 const env = @import("../internal/env.zig");
 const static_mod = @import("../modules/static.zig");
 pub const StaticConfig = static_mod.StaticConfig;
+pub const RouteConfig = struct {
+    roles: []const []const u8 = &.{},
+};
+
 const ctx_mod = @import("context.zig");
 const Ctx = ctx_mod.Ctx;
 const Response = ctx_mod.Response;
@@ -23,6 +27,8 @@ const Hub = @import("../ws/hub.zig").Hub;
 const Ws = @import("../ws/ws.zig").Ws;
 const Sse = @import("../ws/sse.zig").Sse;
 const websocket = @import("../ws/websocket.zig");
+
+
 
 const WsRouteHub = struct {
     handler: Handler,
@@ -631,39 +637,87 @@ pub fn Server(comptime T: type) type {
             return self;
         }
 
-        pub fn get(self: *Self, path: []const u8, handler: anytype) *Self {
+        pub fn get(self: *Self, path: []const u8, handler: anytype, comptime config: anytype) *Self {
             const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
             self.router.add(.GET, path, H) catch unreachable;
+            if (comptime (@hasField(@TypeOf(config), "roles") and config.roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireRoles(config.roles);
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .GET,
+                    .middlewares = &.{rbac_mw},
+                }) catch {};
+            }
             return self;
         }
 
-        pub fn post(self: *Self, path: []const u8, handler: anytype) *Self {
+        pub fn post(self: *Self, path: []const u8, handler: anytype, comptime config: anytype) *Self {
             const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
             self.router.add(.POST, path, H) catch unreachable;
+            if (comptime (@hasField(@TypeOf(config), "roles") and config.roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireRoles(config.roles);
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .POST,
+                    .middlewares = &.{rbac_mw},
+                }) catch {};
+            }
             return self;
         }
 
-        pub fn put(self: *Self, path: []const u8, handler: anytype) *Self {
+        pub fn put(self: *Self, path: []const u8, handler: anytype, comptime config: anytype) *Self {
             const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
             self.router.add(.PUT, path, H) catch unreachable;
+            if (comptime (@hasField(@TypeOf(config), "roles") and config.roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireRoles(config.roles);
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .PUT,
+                    .middlewares = &.{rbac_mw},
+                }) catch {};
+            }
             return self;
         }
 
-        pub fn delete(self: *Self, path: []const u8, handler: anytype) *Self {
+        pub fn delete(self: *Self, path: []const u8, handler: anytype, comptime config: anytype) *Self {
             const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
             self.router.add(.DELETE, path, H) catch unreachable;
+            if (comptime (@hasField(@TypeOf(config), "roles") and config.roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireRoles(config.roles);
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .DELETE,
+                    .middlewares = &.{rbac_mw},
+                }) catch {};
+            }
             return self;
         }
 
-        pub fn patch(self: *Self, path: []const u8, handler: anytype) *Self {
+        pub fn patch(self: *Self, path: []const u8, handler: anytype, comptime config: anytype) *Self {
             const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
             self.router.add(.PATCH, path, H) catch unreachable;
+            if (comptime (@hasField(@TypeOf(config), "roles") and config.roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireRoles(config.roles);
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .PATCH,
+                    .middlewares = &.{rbac_mw},
+                }) catch {};
+            }
             return self;
         }
 
-        pub fn head(self: *Self, path: []const u8, handler: anytype) *Self {
+        pub fn head(self: *Self, path: []const u8, handler: anytype, comptime config: anytype) *Self {
             const H = if (@TypeOf(handler) == Handler) handler else buildWrapper(handler, T);
             self.router.add(.HEAD, path, H) catch unreachable;
+            if (comptime (@hasField(@TypeOf(config), "roles") and config.roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireRoles(config.roles);
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .HEAD,
+                    .middlewares = &.{rbac_mw},
+                }) catch {};
+            }
             return self;
         }
 
@@ -730,7 +784,7 @@ pub fn Server(comptime T: type) type {
         }
 
         pub fn health(self: *Self, path: []const u8, comptime handler: anytype) *Self {
-            return self.get(path, handler);
+            return self.get(path, handler, .{});
         }
 
         pub fn addRoute(
@@ -851,11 +905,11 @@ pub fn app(decorations: anytype) AppType(@TypeOf(decorations)) {
     health_mod.init();
 
     if (cfg.env == .development) {
-        _ = s.get("/_spider/reload", livereload.handler);
+        _ = s.get("/_spider/reload", livereload.handler, .{});
     }
 
-    _ = s.get("/up", health_mod.up);
-    _ = s.get("/_spider/health", health_mod.health);
+    _ = s.get("/up", health_mod.up, .{});
+    _ = s.get("/_spider/health", health_mod.health, .{});
 
     return s;
 }
@@ -872,11 +926,11 @@ pub fn appWithConfig(config: Config) Server(EmptyDeco) {
     health_mod.init();
 
     if (config.env == .development) {
-        _ = s.get("/_spider/reload", livereload.handler);
+        _ = s.get("/_spider/reload", livereload.handler, .{});
     }
 
-    _ = s.get("/up", health_mod.up);
-    _ = s.get("/_spider/health", health_mod.health);
+    _ = s.get("/up", health_mod.up, .{});
+    _ = s.get("/_spider/health", health_mod.health, .{});
 
     return s;
 }

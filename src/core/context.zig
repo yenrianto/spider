@@ -409,6 +409,18 @@ pub const Ctx = struct {
         return self._sse_hub orelse @panic("sseHub: no SSE hub — use server.sse()");
     }
 
+    pub fn hasRole(self: *Ctx, role: []const u8) bool {
+        const count_str = self.params.get("_auth_roles_count") orelse return false;
+        const count = std.fmt.parseInt(usize, count_str, 10) catch return false;
+        var i: usize = 0;
+        while (i < count) : (i += 1) {
+            const key = std.fmt.allocPrint(self.arena, "_auth_role_{d}", .{i}) catch return false;
+            const r = self.params.get(key) orelse continue;
+            if (std.mem.eql(u8, r, role)) return true;
+        }
+        return false;
+    }
+
     pub fn getPath(self: *Ctx) []const u8 {
         return self.request.head.target;
     }

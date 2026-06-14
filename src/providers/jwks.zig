@@ -8,6 +8,10 @@ const NextFn = @import("../core/context.zig").NextFn;
 const rsa = std.crypto.Certificate.rsa;
 const b64 = std.base64.url_safe_no_pad;
 
+const RealmAccess = struct {
+    roles: []const []const u8 = &.{},
+};
+
 const JwkEntry = struct {
     n: []const u8,
     e: []const u8,
@@ -32,6 +36,7 @@ pub const Claims = struct {
     iss: ?[]const u8 = null,
     exp: i64,
     nbf: ?i64 = null,
+    realm_access: ?RealmAccess = null,
     extra: std.StringHashMapUnmanaged([]const u8) = .{},
 };
 
@@ -148,6 +153,7 @@ pub const JwksAuth = struct {
             iss: ?[]const u8 = null,
             email: ?[]const u8 = null,
             name: ?[]const u8 = null,
+            realm_access: ?RealmAccess = null,
         };
 
         const parsed = try std.json.parseFromSlice(RawClaims, allocator, payload_buf[0..payload_len], .{ .ignore_unknown_fields = true });
@@ -165,6 +171,7 @@ pub const JwksAuth = struct {
             .iss = if (parsed.value.iss) |i| try allocator.dupe(u8, i) else null,
             .exp = parsed.value.exp,
             .nbf = parsed.value.nbf,
+            .realm_access = if (parsed.value.realm_access) |ra| ra else null,
         };
     }
 
@@ -253,6 +260,15 @@ pub const JwksAuth = struct {
         }
         if (claims.iss) |iss| {
             try c.params.put(c.arena, try c.arena.dupe(u8, "_auth_iss"), try c.arena.dupe(u8, iss));
+        }
+
+        if (claims.realm_access) |ra| {
+            for (ra.roles, 0..) |role, i| {
+                const key = try std.fmt.allocPrint(c.arena, "_auth_role_{d}", .{i});
+                try c.params.put(c.arena, key, try c.arena.dupe(u8, role));
+            }
+            const count_str = try std.fmt.allocPrint(c.arena, "{d}", .{ra.roles.len});
+            try c.params.put(c.arena, "_auth_roles_count", count_str);
         }
 
         return next(c);
