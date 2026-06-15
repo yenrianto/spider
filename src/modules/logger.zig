@@ -42,7 +42,7 @@ pub fn middleware(c: *Ctx, next: NextFn) anyerror!Response {
         const ns: u64 = if (ns_diff < 0) 0 else @intCast(ns_diff);
         var lat_buf: [32]u8 = undefined;
         const lat = formatLatency(ns, &lat_buf);
-        std.debug.print("{s: <7} {s}  {s}500\x1b[0m  {s}\n", .{ method, path, red, lat });
+        std.debug.print("{s: <7} {s}  {s}ERR\x1b[0m  {s}\n", .{ method, path, red, lat });
         return err;
     };
 
