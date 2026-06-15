@@ -18,3 +18,24 @@ pub fn requireRoles(comptime roles: []const []const u8) MiddlewareFn {
     };
     return S.mw;
 }
+
+/// Retorna um middleware que verifica se o usuário tem pelo menos uma das roles
+/// dentro do claim organizations (Phase Two Keycloak).
+pub fn requireOrgRoles(comptime roles: []const []const u8) MiddlewareFn {
+    const S = struct {
+        fn mw(c: *Ctx, next: NextFn) anyerror!Response {
+            const count_str = c.params.get("_auth_orgs_count") orelse return error.Forbidden;
+            const count = std.fmt.parseInt(usize, count_str, 10) catch return error.Forbidden;
+            var i: usize = 0;
+            while (i < count) : (i += 1) {
+                const key = std.fmt.allocPrint(c.arena, "_auth_org_{d}_role", .{i}) catch continue;
+                const role = c.params.get(key) orelse continue;
+                for (roles) |required| {
+                    if (std.mem.eql(u8, role, required)) return next(c);
+                }
+            }
+            return error.Forbidden;
+        }
+    };
+    return S.mw;
+}

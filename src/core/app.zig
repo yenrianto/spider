@@ -5,7 +5,8 @@ const env = @import("../internal/env.zig");
 const static_mod = @import("../modules/static.zig");
 pub const StaticConfig = static_mod.StaticConfig;
 pub const RouteConfig = struct {
-    roles: []const []const u8 = &.{},
+    roles:     []const []const u8 = &.{},
+    org_roles: []const []const u8 = &.{},
 };
 
 const ctx_mod = @import("context.zig");
@@ -650,6 +651,16 @@ pub fn Server(comptime T: type) type {
                     .middlewares = mw_slice,
                 }) catch {};
             }
+            if (comptime (@hasField(@TypeOf(config), "org_roles") and config.org_roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireOrgRoles(config.org_roles);
+                const mw_slice = std.heap.page_allocator.alloc(MiddlewareFn, 1) catch unreachable;
+                mw_slice[0] = rbac_mw;
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .GET,
+                    .middlewares = mw_slice,
+                }) catch {};
+            }
             return self;
         }
 
@@ -658,6 +669,16 @@ pub fn Server(comptime T: type) type {
             self.router.add(.POST, path, H) catch unreachable;
             if (comptime (@hasField(@TypeOf(config), "roles") and config.roles.len > 0)) {
                 const rbac_mw = @import("../modules/rbac.zig").requireRoles(config.roles);
+                const mw_slice = std.heap.page_allocator.alloc(MiddlewareFn, 1) catch unreachable;
+                mw_slice[0] = rbac_mw;
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .POST,
+                    .middlewares = mw_slice,
+                }) catch {};
+            }
+            if (comptime (@hasField(@TypeOf(config), "org_roles") and config.org_roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireOrgRoles(config.org_roles);
                 const mw_slice = std.heap.page_allocator.alloc(MiddlewareFn, 1) catch unreachable;
                 mw_slice[0] = rbac_mw;
                 self.route_middlewares.append(std.heap.page_allocator, .{
@@ -682,6 +703,16 @@ pub fn Server(comptime T: type) type {
                     .middlewares = mw_slice,
                 }) catch {};
             }
+            if (comptime (@hasField(@TypeOf(config), "org_roles") and config.org_roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireOrgRoles(config.org_roles);
+                const mw_slice = std.heap.page_allocator.alloc(MiddlewareFn, 1) catch unreachable;
+                mw_slice[0] = rbac_mw;
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .PUT,
+                    .middlewares = mw_slice,
+                }) catch {};
+            }
             return self;
         }
 
@@ -690,6 +721,16 @@ pub fn Server(comptime T: type) type {
             self.router.add(.DELETE, path, H) catch unreachable;
             if (comptime (@hasField(@TypeOf(config), "roles") and config.roles.len > 0)) {
                 const rbac_mw = @import("../modules/rbac.zig").requireRoles(config.roles);
+                const mw_slice = std.heap.page_allocator.alloc(MiddlewareFn, 1) catch unreachable;
+                mw_slice[0] = rbac_mw;
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .DELETE,
+                    .middlewares = mw_slice,
+                }) catch {};
+            }
+            if (comptime (@hasField(@TypeOf(config), "org_roles") and config.org_roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireOrgRoles(config.org_roles);
                 const mw_slice = std.heap.page_allocator.alloc(MiddlewareFn, 1) catch unreachable;
                 mw_slice[0] = rbac_mw;
                 self.route_middlewares.append(std.heap.page_allocator, .{
@@ -714,6 +755,16 @@ pub fn Server(comptime T: type) type {
                     .middlewares = mw_slice,
                 }) catch {};
             }
+            if (comptime (@hasField(@TypeOf(config), "org_roles") and config.org_roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireOrgRoles(config.org_roles);
+                const mw_slice = std.heap.page_allocator.alloc(MiddlewareFn, 1) catch unreachable;
+                mw_slice[0] = rbac_mw;
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .PATCH,
+                    .middlewares = mw_slice,
+                }) catch {};
+            }
             return self;
         }
 
@@ -722,6 +773,16 @@ pub fn Server(comptime T: type) type {
             self.router.add(.HEAD, path, H) catch unreachable;
             if (comptime (@hasField(@TypeOf(config), "roles") and config.roles.len > 0)) {
                 const rbac_mw = @import("../modules/rbac.zig").requireRoles(config.roles);
+                const mw_slice = std.heap.page_allocator.alloc(MiddlewareFn, 1) catch unreachable;
+                mw_slice[0] = rbac_mw;
+                self.route_middlewares.append(std.heap.page_allocator, .{
+                    .path = path,
+                    .method = .HEAD,
+                    .middlewares = mw_slice,
+                }) catch {};
+            }
+            if (comptime (@hasField(@TypeOf(config), "org_roles") and config.org_roles.len > 0)) {
+                const rbac_mw = @import("../modules/rbac.zig").requireOrgRoles(config.org_roles);
                 const mw_slice = std.heap.page_allocator.alloc(MiddlewareFn, 1) catch unreachable;
                 mw_slice[0] = rbac_mw;
                 self.route_middlewares.append(std.heap.page_allocator, .{
