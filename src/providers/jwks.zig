@@ -302,25 +302,34 @@ fn injectOrganizations(c: *Ctx, token: []const u8) !void {
 
         const org_name = org_val.object.get("name") orelse continue;
         const roles_val = org_val.object.get("roles") orelse continue;
-        const first_role = switch (roles_val) {
-            .string => |s| s,
-            .array => |arr| blk: {
-                if (arr.items.len == 0) continue;
-                break :blk arr.items[0].string;
+
+        switch (roles_val) {
+            .string => |s| {
+                const id_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_id", .{i});
+                try c.params.put(c.arena, id_key, try c.arena.dupe(u8, org_id));
+                const name_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_name", .{i});
+                try c.params.put(c.arena, name_key, try c.arena.dupe(u8, org_name.string));
+                const role_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_role", .{i});
+                try c.params.put(c.arena, role_key, try c.arena.dupe(u8, s));
+                i += 1;
+            },
+            .array => |arr| {
+                for (arr.items) |role_val| {
+                    const role = switch (role_val) {
+                        .string => |s| s,
+                        else => continue,
+                    };
+                    const id_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_id", .{i});
+                    try c.params.put(c.arena, id_key, try c.arena.dupe(u8, org_id));
+                    const name_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_name", .{i});
+                    try c.params.put(c.arena, name_key, try c.arena.dupe(u8, org_name.string));
+                    const role_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_role", .{i});
+                    try c.params.put(c.arena, role_key, try c.arena.dupe(u8, role));
+                    i += 1;
+                }
             },
             else => continue,
-        };
-
-        const id_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_id", .{i});
-        try c.params.put(c.arena, id_key, try c.arena.dupe(u8, org_id));
-
-        const name_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_name", .{i});
-        try c.params.put(c.arena, name_key, try c.arena.dupe(u8, org_name.string));
-
-        const role_key = try std.fmt.allocPrint(c.arena, "_auth_org_{d}_role", .{i});
-        try c.params.put(c.arena, role_key, try c.arena.dupe(u8, first_role));
-
-        i += 1;
+        }
     }
 
     const count_str = try std.fmt.allocPrint(c.arena, "{d}", .{i});

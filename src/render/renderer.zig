@@ -58,7 +58,7 @@ pub fn renderNode(node: Node, ctx: *Context, alc: std.mem.Allocator, result: *st
             if (ctx.get(fnn.iterable)) |value| {
                 if (value == .list) {
                     for (value.list, 0..) |elem, idx| {
-                        var loop_ctx = Context.init();
+                        var loop_ctx = try ctx.clone(alc);
                         defer loop_ctx.deinit(alc);
                         switch (elem) {
                             .string => try loop_ctx.set(alc, fnn.capture, Value{ .string = try alc.dupe(u8, elem.string) }),
