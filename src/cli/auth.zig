@@ -161,20 +161,26 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, provider: []const u8, api: 
     // Append env vars to .env.example
     if (std.mem.eql(u8, provider, "keycloak")) {
         const env_example_path = ".env.example";
-        const env_vars =
+        const env_vars_base =
             "\n# Keycloak\n" ++
             "KEYCLOAK_BASE_URL=http://localhost:8080\n" ++
             "KEYCLOAK_REALM=myrealm\n" ++
             "KEYCLOAK_CLIENT_ID=spider-app\n" ++
             "KEYCLOAK_CLIENT_SECRET=your-client-secret\n" ++
             "KEYCLOAK_REDIRECT_URI=http://localhost:3000/auth/callback\n" ++
-            "KEYCLOAK_REDIRECT_URI_LOGOUT=http://localhost:3000\n" ++
-            "JWT_SECRET=change-me-in-production\n";
+            "KEYCLOAK_REDIRECT_URI_LOGOUT=http://localhost:3000\n";
 
         const existing = root_dir.readFileAlloc(io, env_example_path, allocator, .limited(16 * 1024)) catch "";
         defer if (existing.len > 0) allocator.free(existing);
 
         if (std.mem.indexOf(u8, existing, "KEYCLOAK_") == null) {
+            const jwt_suffix = if (std.mem.indexOf(u8, existing, "JWT_SECRET") == null)
+                "JWT_SECRET=change-me-in-production\n"
+            else
+                "";
+
+            const env_vars = try std.mem.concat(allocator, u8, &.{ env_vars_base, jwt_suffix });
+            defer allocator.free(env_vars);
             const new_content = try std.mem.concat(allocator, u8, &.{ existing, env_vars });
             defer allocator.free(new_content);
             try fs_utils.writeFile(io, root_dir, env_example_path, new_content);

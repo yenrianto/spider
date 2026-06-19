@@ -45,17 +45,17 @@ pub fn updateMainZig(
     });
     defer allocator.free(with_import);
 
-    // 2. Add CRUD routes before .listen(
+    // 2. Add CRUD routes before .onError(
     // SSR mode: GET index, new, edit + POST create, update, delete
     // API mode: GET index, show + POST create + PATCH update + DELETE delete
     const routes = if (api)
         try std.fmt.allocPrint(
             allocator,
-            "        .get(\"/{s}\", {s}.controller.index)\n" ++
-                "        .get(\"/{s}/:id\", {s}.controller.show)\n" ++
-                "        .post(\"/{s}\", {s}.controller.create)\n" ++
-                "        .patch(\"/{s}/:id\", {s}.controller.update)\n" ++
-                "        .delete(\"/{s}/:id\", {s}.controller.delete)\n",
+            "        .get(\"/{s}\", {s}.controller.index, .{{}})\n" ++
+                "        .get(\"/{s}/:id\", {s}.controller.show, .{{}})\n" ++
+                "        .post(\"/{s}\", {s}.controller.create, .{{}})\n" ++
+                "        .patch(\"/{s}/:id\", {s}.controller.update, .{{}})\n" ++
+                "        .delete(\"/{s}/:id\", {s}.controller.delete, .{{}})\n",
             .{
                 plural, feature,
                 plural, feature,
@@ -67,12 +67,12 @@ pub fn updateMainZig(
     else
         try std.fmt.allocPrint(
             allocator,
-            "        .get(\"/{s}\", {s}.controller.index)\n" ++
-                "        .get(\"/{s}/new\", {s}.controller.newForm)\n" ++
-                "        .get(\"/{s}/:id/edit\", {s}.controller.edit)\n" ++
-                "        .post(\"/{s}/create\", {s}.controller.create)\n" ++
-                "        .post(\"/{s}/:id/update\", {s}.controller.update)\n" ++
-                "        .post(\"/{s}/:id/delete\", {s}.controller.delete)\n",
+            "        .get(\"/{s}\", {s}.controller.index, .{{}})\n" ++
+                "        .get(\"/{s}/new\", {s}.controller.newForm, .{{}})\n" ++
+                "        .get(\"/{s}/:id/edit\", {s}.controller.edit, .{{}})\n" ++
+                "        .post(\"/{s}/create\", {s}.controller.create, .{{}})\n" ++
+                "        .post(\"/{s}/:id/update\", {s}.controller.update, .{{}})\n" ++
+                "        .post(\"/{s}/:id/delete\", {s}.controller.delete, .{{}})\n",
             .{
                 plural, feature,
                 plural, feature,
@@ -84,18 +84,18 @@ pub fn updateMainZig(
         );
     defer allocator.free(routes);
 
-    // Find .listen( marker to insert routes just before it
-    const listen_marker = "        .listen(";
-    const listen_pos = std.mem.indexOf(u8, with_import, listen_marker) orelse {
-        std.debug.print("warning: could not find .listen( in main.zig\n", .{});
+    // Find .onError( marker to insert routes just before it
+    const onerror_marker = "        .onError(";
+    const onerror_pos = std.mem.indexOf(u8, with_import, onerror_marker) orelse {
+        std.debug.print("warning: could not find .onError( in main.zig\n", .{});
         return;
     };
 
-    // Build final content with routes inserted before .listen(
+    // Build final content with routes inserted before .onError(
     const final_content = try std.mem.concat(allocator, u8, &.{
-        with_import[0..listen_pos],
+        with_import[0..onerror_pos],
         routes,
-        with_import[listen_pos..],
+        with_import[onerror_pos..],
     });
     defer allocator.free(final_content);
 
