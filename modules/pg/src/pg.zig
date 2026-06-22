@@ -2,7 +2,7 @@ const std = @import("std");
 const pg_lib = @import("pg");
 const env = @import("spider").env;
 
-pub fn toUuidString(uuid: []const u8) ![32]u8 {
+pub fn toUuidString(uuid: []const u8) ![36]u8 {
     return try pg_lib.types.UUID.toString(uuid);
 }
 
